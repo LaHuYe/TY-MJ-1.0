@@ -18,14 +18,14 @@
 #define TIME_CYCLE 100 // 100us
 
 // 同步码时序（100us 定时周期）
-#define SYNC_HIGH_DURATION (12000 / TIME_CYCLE)  // 同步码高电平：400us = 4 个周期
-#define SYNC_LOW_DURATION  (270000 / TIME_CYCLE) // 同步码低电平：9ms = 90 个周期
+#define SYNC_HIGH_DURATION (400 / TIME_CYCLE)  // 同步码高电平：400us = 4 个周期
+#define SYNC_LOW_DURATION  (9000 / TIME_CYCLE) // 同步码低电平：9ms = 90 个周期
 
 // 数据位时序（100us 定时周期）
-#define BIT0_HIGH_DURATION (12000 / TIME_CYCLE)  // bit0 高电平：400us = 4 个周期
-#define BIT0_LOW_DURATION  (24000 / TIME_CYCLE)  // bit0 低电平：800us = 8 个周期
-#define BIT1_HIGH_DURATION (30000 / TIME_CYCLE) // bit1 高电平：1ms = 10 个周期
-#define BIT1_LOW_DURATION  (6000 / TIME_CYCLE)   // bit1 低电平：200us = 2 个周期
+#define BIT0_HIGH_DURATION (400 / TIME_CYCLE)  // bit0 高电平：400us = 4 个周期
+#define BIT0_LOW_DURATION  (800 / TIME_CYCLE)  // bit0 低电平：800us = 8 个周期
+#define BIT1_HIGH_DURATION (1000 / TIME_CYCLE) // bit1 高电平：1ms = 10 个周期
+#define BIT1_LOW_DURATION  (200 / TIME_CYCLE)   // bit1 低电平：200us = 2 个周期
 
 // 地址长度：2字节（16位）
 #define ADDR_SIZE 2

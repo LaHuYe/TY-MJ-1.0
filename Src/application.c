@@ -345,6 +345,7 @@ void app_Init(void)
     addr_tx_init();  // 地址发送初始化
     bat_init();      // 电池初始化
     addr_tx_init();  // 地址发送初始化
+    // TODO 添加RF初始化
     // iwdg_Init();          // 看门狗初始化
     // DEBUG_USART_Config(); // 将串口配置成日志口
     version_printf();     // 版本打印
