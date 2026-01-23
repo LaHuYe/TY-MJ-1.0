@@ -1,0 +1,37 @@
+{
+    "files.associations": {
+        "adc.h": "c",
+        "application.h": "c",
+        "main.h": "c",
+        "bat.h": "c",
+        "common.h": "c",
+        "py32c643_ll_rcc.h": "c",
+        "py32c643_ll_bus.h": "c",
+        "py32c643_ll_system.h": "c",
+        "py32c643_ll_cortex.h": "c",
+        "py32c643_ll_gpio.h": "c",
+        "py32c643_ll_tim.h": "c",
+        "py32c643xx_ll_start_kit.h": "c",
+        "py32c643_hal_conf.h": "c",
+        "timpwm.h": "c",
+        "pwm.h": "c",
+        "log.h": "c",
+        "pwr_stop.h": "c",
+        "i2c.h": "c",
+        "gzp6859d.h": "c",
+        "pm4p63.h": "c",
+        "lptim.h": "c",
+        "led.h": "c",
+        "py32f0xx_hal.h": "c",
+        "py32f0xx_hal_conf.h": "c",
+        "tim.h": "c",
+        "tm1621.h": "c",
+        "py32f030xx_start_kit.h": "c"
+    }
+    "files.exclude": {
+        // "Drivers": true,
+        "Output": true,
+        // "MDK-ARM": true,
+        // "Doc": true,
+    }
+}
