@@ -109,10 +109,17 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
         bldc_app_handle(); // ✅ BLDC电机处理（必须高频调用，替代中断方式）
 
         time_50us_count++;
+
         // 100us定时
+        if (time_50us_count % 2 == 0)
+        {
+            addr_rx_decode();
+        }
+        
+        // 1ms定时
         if (time_50us_count % 20 == 0)
         {
-            // 1ms定时
+            
             time_50us_count = 0;
             keyCheckProcess();
         }

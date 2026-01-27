@@ -260,7 +260,7 @@ void low_power_handle(void)
                     // 连续2秒都低于阈值，判定为低电，进入低电关机
                     app_close_all_device();                     // 关闭所有外设
                     app_state.low_power_shutdown_flag = true;   // 设置低电关机标志位为true
-                    app_state.low_power_start_time = 0;          // 清零低电开始时间戳
+                    app_state.low_power_start_time = 0;         // 清零低电开始时间戳
                     app_state.state = APP_STATE_ALARM;          // 进入报警状态处理灯显
                     LED_EventAdd(LED_EVENT_LOW_POWER_SHUTDOWN); // 添加低电LED事件
                     appPrintf(LOG_WARNING, "battery low\r\n");
@@ -290,9 +290,9 @@ void stuck_handle(void)
 {
     if (bldc_is_stalled())
     {
-        bldc_clear_stalled_flag();              // 清除堵转标志
-        app_close_all_device();                 // 关闭所有外设
-        app_state.state = APP_STATE_SLEEP;      // 进入报警状态处理灯显
+        bldc_clear_stalled_flag();         // 清除堵转标志
+        app_close_all_device();            // 关闭所有外设
+        app_state.state = APP_STATE_SLEEP; // 进入报警状态处理灯显
         appPrintf(LOG_WARNING, "BLDC motor stuck\r\n");
     }
 }
@@ -462,7 +462,7 @@ void app_Init(void)
     power_gpio_init(); // 初始化电源控制
 
     // 模块初始化
-    bat_init(); // 初始化电池
+    bat_init();     // 初始化电池
 
     // set_bldc_power_enable(true);            // 设置BLDC供电使能
     // bldc_app_init();                        // 初始化BLDC电机
@@ -473,9 +473,9 @@ void app_lication(void)
     while (1)
     {
         // Log("test:%d, test_pwm:%d speed:%dRPM\r\n", test, test_pwm, BLDC_COMP_GetSpeed());
-        user_key_handle();  // 按键处理函数
-        user_led_handle();  // LED处理函数
-        low_power_handle(); // 低电处理
+        user_key_handle();    // 按键处理函数
+        user_led_handle();    // LED处理函数
+        low_power_handle();   // 低电处理
         app_machine_handle(); // 状态机处理函数
     }
 }

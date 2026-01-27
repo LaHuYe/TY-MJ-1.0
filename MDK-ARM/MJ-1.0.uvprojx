@@ -459,6 +459,11 @@
               <FileType>1</FileType>
               <FilePath>..\Core\pwr_stop.c</FilePath>
             </File>
+            <File>
+              <FileName>addr_rx.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Core\addr_rx.c</FilePath>
+            </File>
           </Files>
         </Group>
         <Group>

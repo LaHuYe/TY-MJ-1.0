@@ -13,9 +13,10 @@
 #include "power_control.h"
 #include "pwr_stop.h"
 #include "tim.h"
+#include "addr_rx.h"
 
 // G13是项目编号，02是硬件版本（如换板子等）00是软件大版本，000是软件小版本
-#define __VERSION__     "G13_02.00.000"
+#define __VERSION__     "MJ-1.0_02.00.000"
 #define __DEVELOPER__   "WuChuYuan"
 #define __EMAIL__       "1917507415@qq.com"
 #define __COMMIT_HASH__ "09e1ad24dac69b532a88f8628d81ee3be51de31b"
