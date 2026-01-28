@@ -43,6 +43,7 @@ extern "C" {
 #include "py32f0xx_hal.h"
 #include <stdbool.h>
 #include <stdint.h>
+#include <stdio.h>
 
 /* Private includes ----------------------------------------------------------*/
 /* Private defines -----------------------------------------------------------*/
@@ -192,6 +193,7 @@ void Error_Handler(uint8_t *file, uint32_t line);
  * @retval  时间差
  */
 uint32_t HAL_GetTickDiff(uint32_t meiosis);
+void APP_DelayNops(uint32_t Nops);
 
 #ifdef __cplusplus
 }

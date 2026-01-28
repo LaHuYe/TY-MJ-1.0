@@ -1,5 +1,8 @@
 #include "pwr_stop.h"
 #include "application.h"
+#include "cmt2300a.h"
+#include "cmt_spi3.h"
+#include	"radio.h"
 
 extern ADC_HandleTypeDef AdcHandle;
 extern DMA_HandleTypeDef HdmaCh1;
@@ -131,6 +134,9 @@ static void pwr_wakeUp_Init(void)
     All_Tim_Init();    // 初始化定时器（TIM1, TIM3, TIM16）
     user_led_init();   // 初始化LED
     power_gpio_init(); // 初始化电源控制
+	
+		cmt_spi3_init();	//433初始化
+		RF_Init();
 }
 
 static void sleep_confing(void)

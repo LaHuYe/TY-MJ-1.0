@@ -1,4 +1,8 @@
 #include "application.h"
+#include "py32f0xx_hal.h"
+#include "cmt2300a.h"
+#include "cmt_spi3.h"
+#include	"radio.h"
 
 /****************** 初始化层开始*******************/
 
@@ -7,6 +11,13 @@ static app_state_t app_state = {
     .gear = 1, // 默认档位为1
 };
 extern CircularQueue s_modeCheckQueue;
+#define RF_RX_TIMEOUT    1000*60*60      //60min
+#define RF_PACKET_SIZE   32               /* Define the payload size here */
+
+static uint8_t g_rxBuffer[RF_PACKET_SIZE];   /* RF Rx buffer */
+
+char str[32];
+uint32_t g_nRecvCount=0,g_nSendCount=0;
 
 void app_close_all_device(void);
 /****************** 初始化层开始*******************/
@@ -451,6 +462,8 @@ extern uint32_t test_pwm;
 void app_Init(void)
 {
     // 系统初始化
+		cmt_spi3_init();	//433初始化
+	
     DEBUG_USART_Config(); // 将串口配置成日志口
     version_printf();     // 打印版本信息
 
@@ -462,12 +475,66 @@ void app_Init(void)
     power_gpio_init(); // 初始化电源控制
 
     // 模块初始化
-    bat_init();     // 初始化电池
-
+    bat_init(); // 初始化电池
+		
+		RF_Init();
     // set_bldc_power_enable(true);            // 设置BLDC供电使能
     // bldc_app_init();                        // 初始化BLDC电机
     // bldc_set_gear((BLDC_Gear_t)app_state.gear); // 设置BLDC档位
 }
+uint8_t Radio_Recv_FixedLen(uint8_t pBuf[],uint8_t len)
+{
+#ifdef ENABLE_ANTENNA_SWITCH
+	      if(CMT2300A_ReadGpio3())  /* Read INT2, PKT_DONE */
+#else
+				if(CMT2300A_ReadGpio1()) /* Read INT1, SYNC OK */
+				{
+				  /******/
+				}
+        if(CMT2300A_ReadGpio2())  /* Read INT2, PKT_DONE */
+#endif	
+		   {
+//        if(CMT2300A_MASK_PKT_OK_FLG & CMT2300A_ReadReg(CMT2300A_CUS_INT_FLAG))  /* Read PKT_OK flag */
+				 {
+						CMT2300A_GoStby();
+						CMT2300A_ReadFifo(pBuf,len);
+						CMT2300A_ClearRxFifo();
+						CMT2300A_ClearInterruptFlags();
+						CMT2300A_GoRx();
+						
+						return 1;
+				 }
+		   }
+
+		return 0;
+}
+void radio_Recv(void)
+{
+		uint8_t	i = 0;
+	
+	 if(Radio_Recv_FixedLen(g_rxBuffer,RF_PACKET_SIZE))
+			 {
+				  g_nRfRxtimeoutCount=0;  //清除 Time Out计数
+				  g_nRecvCount++;
+          printf("recv: %d %s", g_nRecvCount,g_rxBuffer);
+				 
+			    for(i=0;i<RF_PACKET_SIZE;i++) //Clear Buff
+				   g_rxBuffer[i]=0;
+				 
+			 }
+
+        
+       if(g_nRfRxtimeoutCount>RF_RX_TIMEOUT) //根据实际应用可以调整Time Out
+			 {
+				  g_nRfRxtimeoutCount=0;
+					CMT2300A_GoSleep();
+					CMT2300A_GoStby();
+					CMT2300A_ClearInterruptFlags();
+					CMT2300A_ClearRxFifo();
+					CMT2300A_GoRx();
+			 }				 
+}
+
 void app_lication(void)
 {
     while (1)
@@ -477,5 +544,6 @@ void app_lication(void)
         user_led_handle();    // LED处理函数
         low_power_handle();   // 低电处理
         app_machine_handle(); // 状态机处理函数
+				radio_Recv();					//接收天线处理函数
     }
 }

@@ -40,6 +40,19 @@
 static void APP_SystemClockConfig(void);
 uint8_t lptim_flag = 0;
 /**
+  * @brief  Delayed by NOPS
+  * @param  None
+  * @retval None
+  */
+void APP_DelayNops(uint32_t Nops)
+{
+  for(uint32_t i=0; i<Nops;i++)
+  {
+    __NOP();
+  }
+}
+
+/**
  * @brief  Main program.
  * @retval int
  */
@@ -50,8 +63,11 @@ int main(void)
     /* Configure the system clock */
     APP_SystemClockConfig();
     HAL_Delay(1000); // 防止SWD被初始化
+
     app_Init();
+		
     app_lication();
+		
 }
 
 /**
