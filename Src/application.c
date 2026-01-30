@@ -453,7 +453,7 @@ void app_RF_Recv_handle()
 		uint8_t	i = 0;
 		uint8_t	sum = 0;
 	
-		printf("recv:%d  0x%u  0x%u 0x%u 0x%u 0x%u 0x%u\n", g_nRecvCount,RxBuffer[0],RxBuffer[1],RxBuffer[2],RxBuffer[3],RxBuffer[4],RxBuffer[5]);
+		printf("Rx:%#x %#x %#x %#x %#x %#x\n",RxBuffer[0],RxBuffer[1],RxBuffer[2],RxBuffer[3],RxBuffer[4],RxBuffer[5]);
 		
 		sum = (RxBuffer[0] + RxBuffer[1] + RxBuffer[2] + RxBuffer[3] + RxBuffer[4])&0xFF;
 		
@@ -471,7 +471,7 @@ void app_RF_Recv_handle()
 				bldc_set_gear((BLDC_Gear_t)app_state.gear);
 				LED_EventAdd(LED_EVENT_KEY_OPERATION); 
 			}
-			else if(RxBuffer[2] == 0x10)
+			else if(RxBuffer[3] == 0x20)
 			{
 				//减速
 				app_state.gear--;

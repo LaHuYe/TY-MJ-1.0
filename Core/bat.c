@@ -80,8 +80,8 @@ uint16_t bat_get_voltage_mv(void)
     if (currentTime - lastPrintTime >= 1000)
     {
         lastPrintTime = currentTime;
-        batPrintf(LOG_DEBUG, "adc_vol:%f \r\n", adc_vol);
-        adcPrintf(LOG_DEBUG, "bat_vol: %f V\r\n", bat_vol);
+//        batPrintf(LOG_DEBUG, "adc_vol:%f \r\n", adc_vol);
+//        adcPrintf(LOG_DEBUG, "bat_vol: %f V\r\n", bat_vol);
         adcPrintf(LOG_NOTIC, "avg_bat_vol_mV: %d mV\r\n", avg_bat_vol_mV);
     }
 
