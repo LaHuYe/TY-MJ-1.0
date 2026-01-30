@@ -791,7 +791,7 @@ u8 Radio_Send_FixedLen(const u8 pBuf[], u8 len)
 			BSP_LED_Off(LED_GREEN);
 			
 			g_nSendCount++; 
-			printf("Tx: 0x%2u	0x%2u 0x%2u 0x%2u 0x%2u 0x%2u\n",TX_Buffer[0],TX_Buffer[1],TX_Buffer[2],TX_Buffer[3],TX_Buffer[4],TX_Buffer[5]);
+			printf("Tx: %#x	%#x %#x %#x %#x %#x\n",TX_Buffer[0],TX_Buffer[1],TX_Buffer[2],TX_Buffer[3],TX_Buffer[4],TX_Buffer[5]);
 			
 			return 1; // 
 		}
