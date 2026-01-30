@@ -318,10 +318,8 @@ __weak void HAL_IncTick(void)
   *       implementations in user file.
   * @retval tick value
   */
-volatile uint32_t g_nRfRxtimeoutCount = 0;
 __weak uint32_t HAL_GetTick(void)
 {
-	g_nRfRxtimeoutCount++; //RF time out
   return uwTick;
 }
 

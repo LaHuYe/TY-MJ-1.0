@@ -39,18 +39,6 @@
 /* Private function prototypes -----------------------------------------------*/
 static void APP_SystemClockConfig(void);
 uint8_t lptim_flag = 0;
-/**
-  * @brief  Delayed by NOPS
-  * @param  None
-  * @retval None
-  */
-void APP_DelayNops(uint32_t Nops)
-{
-  for(uint32_t i=0; i<Nops;i++)
-  {
-    __NOP();
-  }
-}
 
 /**
  * @brief  Main program.
@@ -65,9 +53,8 @@ int main(void)
     HAL_Delay(1000); // 防止SWD被初始化
 
     app_Init();
-		
+
     app_lication();
-		
 }
 
 /**
@@ -131,11 +118,11 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
         {
             addr_rx_decode();
         }
-        
+
         // 1ms定时
         if (time_50us_count % 20 == 0)
         {
-            
+
             time_50us_count = 0;
             keyCheckProcess();
         }

@@ -17,19 +17,20 @@
  * @date    Jul 17 2017
  * @author  CMOSTEK R@D
  */
- 
+
 #ifndef __RADIO_H
 #define __RADIO_H
 
-#include "typedefs.h"
 #include "cmt2300a.h"
+#include "main.h"
 
-#ifdef __cplusplus 
-extern "C" { 
+#ifdef __cplusplus
+extern "C" {
 #endif
 
 /* RF state machine */
-typedef enum {
+typedef enum
+{
     RF_STATE_IDLE = 0,
     RF_STATE_RX_START,
     RF_STATE_RX_WAIT,
@@ -43,7 +44,8 @@ typedef enum {
 } EnumRFStatus;
 
 /* RF process function results */
-typedef enum {
+typedef enum
+{
     RF_IDLE = 0,
     RF_BUSY,
     RF_RX_DONE,
@@ -53,22 +55,32 @@ typedef enum {
     RF_ERROR,
 } EnumRFResult;
 
-//#define ENABLE_ANTENNA_SWITCH  //开启电子开关
+// #define ENABLE_ANTENNA_SWITCH  //开启电子开关
+
+#define RF_RX_TIMEOUT  1000 * 60 * 60 // 60min
+#define RF_PACKET_SIZE 6              /* Define the payload size here */
 
 void RF_Init(void);
 void RF_Config(void);
 
-void RF_SetStatus(EnumRFStatus nStatus);
-EnumRFStatus RF_GetStatus(void);
-u8 RF_GetInterruptFlags(void);
+/**
+ * @brief   获取接收缓冲区
+ * @param   none
+ * @return  uint8_t *: 接收缓冲区
+ * @note    获取接收缓冲区
+ */
+uint8_t *RF_GetRxBuffer(void);
 
-void RF_StartRx(u8 buf[], u16 len, u32 timeout);
-void RF_StartTx(u8 buf[], u16 len, u32 timeout);
+/**
+ * @brief   接收天线处理
+ * @param   none
+ * @return  none
+ * @note    接收天线处理
+ */
+void radio_recv_handle(void);
 
-EnumRFResult RF_Process(void);
-
-#ifdef __cplusplus 
-} 
+#ifdef __cplusplus
+}
 #endif
 
 #endif

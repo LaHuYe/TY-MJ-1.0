@@ -29,9 +29,9 @@
         "py32f030xx_start_kit.h": "c"
     }
     "files.exclude": {
-        "Drivers": true,
-        "Output": true,
-        "MDK-ARM": true,
+        // "Drivers": true,
+        // "Output": true,
+        // "MDK-ARM": true,
         // "Doc": true,
     }
 }

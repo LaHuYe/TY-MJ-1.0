@@ -169,6 +169,28 @@ extern uint8_t lptim_flag;
 #define BLDC_COMP_NEUTRAL_GPIO_CLK_ENABLE() __HAL_RCC_GPIOB_CLK_ENABLE();
 /********************************************************************/
 
+/***************************** 433 GPIO *****************************/
+// CSB引脚
+#define CMT2300A_CSB_PIN               GPIO_PIN_5
+#define CMT2300A_CSB_GPIO_PORT         GPIOA
+#define CMT2300A_CSB_GPIO_CLK_ENABLE() __HAL_RCC_GPIOA_CLK_ENABLE();
+
+// SCLK引脚
+#define CMT2300A_SCLK_PIN               GPIO_PIN_3
+#define CMT2300A_SCLK_GPIO_PORT         GPIOA
+#define CMT2300A_SCLK_GPIO_CLK_ENABLE() __HAL_RCC_GPIOA_CLK_ENABLE();
+
+// SDIO引脚
+#define CMT2300A_SDIO_PIN               GPIO_PIN_4
+#define CMT2300A_SDIO_GPIO_PORT         GPIOB
+#define CMT2300A_SDIO_GPIO_CLK_ENABLE() __HAL_RCC_GPIOB_CLK_ENABLE();
+
+// FCSB引脚
+#define CMT2300A_FCSB_PIN               GPIO_PIN_6
+#define CMT2300A_FCSB_GPIO_PORT         GPIOA
+#define CMT2300A_FCSB_GPIO_CLK_ENABLE() __HAL_RCC_GPIOA_CLK_ENABLE();
+/********************************************************************/
+
 typedef enum
 {
     STATUS_SUCCESS,
@@ -193,7 +215,6 @@ void Error_Handler(uint8_t *file, uint32_t line);
  * @retval  时间差
  */
 uint32_t HAL_GetTickDiff(uint32_t meiosis);
-void APP_DelayNops(uint32_t Nops);
 
 #ifdef __cplusplus
 }

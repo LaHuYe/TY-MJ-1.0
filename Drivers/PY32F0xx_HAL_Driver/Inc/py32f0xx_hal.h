@@ -80,7 +80,6 @@ typedef enum
   */
 extern uint32_t uwTickPrio;
 extern uint32_t uwTickFreq;
-extern volatile uint32_t g_nRfRxtimeoutCount;
 /**
   * @}
   */

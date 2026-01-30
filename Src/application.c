@@ -1,8 +1,8 @@
 #include "application.h"
-#include "py32f0xx_hal.h"
 #include "cmt2300a.h"
 #include "cmt_spi3.h"
-#include	"radio.h"
+#include "py32f0xx_hal.h"
+#include "radio.h"
 
 /****************** 初始化层开始*******************/
 
@@ -10,15 +10,6 @@ static app_state_t app_state = {
     .state = APP_STATE_SLEEP,
     .gear = 1, // 默认档位为1
 };
-extern CircularQueue s_modeCheckQueue;
-#define RF_RX_TIMEOUT    1000*60*60      //60min
-#define RF_PACKET_SIZE   6               /* Define the payload size here */
-
-static uint8_t RxBuffer[RF_PACKET_SIZE];   /* RF Rx buffer */
-
-char str[32];
-uint32_t g_nRecvCount=0,g_nSendCount=0;
-
 void app_close_all_device(void);
 /****************** 初始化层开始*******************/
 /****************** KEY 应用事件开始*****************/
@@ -308,6 +299,107 @@ void stuck_handle(void)
     }
 }
 
+/**
+ * @brief   应用RF接收处理
+ * @param   none
+ * @return  none
+ * @note    应用RF接收处理
+ */
+void app_RF_Recv_handle()
+{
+    // 充电状态或充电满状态，不进行接收
+    if (app_state.state != APP_STATE_CHARGING && app_state.state != APP_STATE_FULL_CHARGING)
+    {
+        return;
+    }
+
+    // 接收天线处理
+    radio_recv_handle();
+
+    // 获取接收缓冲区
+    uint8_t *RxBuffer = RF_GetRxBuffer();
+
+    // 如果接收缓冲区为空，则返回
+    if (RxBuffer == NULL)
+    {
+        return;   
+    }
+
+    // 计算校验和，用于校验接收到的数据是否正确
+    uint8_t sum = 0;
+
+    // 打印接收到的数据
+    Log("recv:");
+    for (size_t i = 0; i < RF_PACKET_SIZE; i++)
+    {
+        sum += RxBuffer[i];
+        Log("0x%02x ", RxBuffer[i]);
+    }
+    Log("\r\n");
+
+    // 校验接收到的数据是否正确
+    if ((RxBuffer[0] == 0xAA) && (RxBuffer[5] == sum))
+    {
+        if (RxBuffer[3] == 0x10)
+        {
+            // 加速.
+            app_state.gear++;
+            // 档位最大为BLDC_GEAR_100
+            if (app_state.gear >= BLDC_GEAR_MAX)
+            {
+                app_state.gear = BLDC_GEAR_100;
+            }
+            bldc_set_gear((BLDC_Gear_t)app_state.gear);
+            LED_EventAdd(LED_EVENT_KEY_OPERATION);
+        }
+        else if (RxBuffer[3] == 0x20)
+        {
+            // 减速
+            app_state.gear--;
+            // 档位最大为BLDC_GEAR_100
+            if (app_state.gear <= BLDC_GEAR_1)
+            {
+                app_state.gear = BLDC_GEAR_1;
+            }
+            bldc_set_gear((BLDC_Gear_t)app_state.gear);
+            LED_EventAdd(LED_EVENT_KEY_OPERATION);
+        }
+
+        if (RxBuffer[4] == 0x10)
+        {
+            if (app_state.state != APP_STATE_MUSCLE_GUN)
+            {
+                // 启动
+                set_bldc_power_enable(true);                // 设置BLDC供电使能
+                bldc_app_init();                            // 初始化BLDC电机
+                app_state.state = APP_STATE_MUSCLE_GUN;     // 进入筋膜枪状
+                bldc_set_gear((BLDC_Gear_t)app_state.gear); // 设置BLDC档位
+                LED_EventAdd(LED_EVENT_KEY_OPERATION);      // 添加按键操作事件
+            }
+        }
+        else if (RxBuffer[4] == 0x40)
+        {
+            // 暂停
+            if (app_state.state == APP_STATE_MUSCLE_GUN)
+            {
+                app_close_all_device();
+                app_state.state = APP_STATE_STARTUP;     // 进入开机状态
+                LED_EventAdd(LED_EVENT_STARTUP_DISPLAY); // 开机显示
+                app_state.startup_time = HAL_GetTick();  // 重置开机时间戳
+            }
+        }
+        else if (RxBuffer[4] == 0x80)
+        {
+            // 关机
+            if (app_state.state == APP_STATE_STARTUP)
+            {
+                app_state.state = APP_STATE_SLEEP;
+                app_close_all_device(); // 关闭所有外设
+            }
+        }
+    }
+}
+
 /*******************用户应用层结束*****************/
 
 /*******************状态机应用层开始********************/
@@ -441,80 +533,6 @@ void app_machine_handle(void)
         break;
     }
 }
-
-/**
- * @brief   应用状态机处理
- * @param   none
- * @return  none
- * @note    应用状态机处理
- */
-void app_RF_Recv_handle()
-{
-		uint8_t	i = 0;
-		uint8_t	sum = 0;
-	
-		printf("Rx:%#x %#x %#x %#x %#x %#x\n",RxBuffer[0],RxBuffer[1],RxBuffer[2],RxBuffer[3],RxBuffer[4],RxBuffer[5]);
-		
-		sum = (RxBuffer[0] + RxBuffer[1] + RxBuffer[2] + RxBuffer[3] + RxBuffer[4])&0xFF;
-		
-		if((RxBuffer[0] == 0xAA)&&(RxBuffer[5] == sum))
-		{
-			if(RxBuffer[3] == 0x10)
-			{
-				//加速.
-				 app_state.gear++;
-				// 档位最大为BLDC_GEAR_100
-				if (app_state.gear >= BLDC_GEAR_MAX)
-				{
-					app_state.gear = BLDC_GEAR_100;
-				}
-				bldc_set_gear((BLDC_Gear_t)app_state.gear);
-				LED_EventAdd(LED_EVENT_KEY_OPERATION); 
-			}
-			else if(RxBuffer[3] == 0x20)
-			{
-				//减速
-				app_state.gear--;
-				// 档位最大为BLDC_GEAR_100
-				if (app_state.gear <= BLDC_GEAR_1)
-				{
-					app_state.gear = BLDC_GEAR_1;
-				}
-				bldc_set_gear((BLDC_Gear_t)app_state.gear);
-				LED_EventAdd(LED_EVENT_KEY_OPERATION); 
-			}
-			
-			if(RxBuffer[4] == 0x10)
-			{
-				if(app_state.state != APP_STATE_MUSCLE_GUN)
-				{
-					//启动
-					set_bldc_power_enable(true);            // 设置BLDC供电使能
-					bldc_app_init();                        // 初始化BLDC电机
-					app_state.state = APP_STATE_MUSCLE_GUN; // 进入筋膜枪状
-					bldc_set_gear((BLDC_Gear_t)app_state.gear); // 设置BLDC档位
-					LED_EventAdd(LED_EVENT_KEY_OPERATION);      // 添加按键操作事件
-				}
-			}
-			else if(RxBuffer[4] == 0x40)
-			{
-				//待机
-				set_bldc_power_enable(false); 
-				app_state.state = APP_STATE_STARTUP; 
-				app_close_all_device(); 
-			}
-			else if(RxBuffer[4] == 0x80)
-			{
-				//关机
-				app_state.state = APP_STATE_SLEEP;
-				device_sleep_handle();
-			}
-			
-		}
-		for(i=0;i<RF_PACKET_SIZE;i++) //Clear Buff
-				RxBuffer[i]=0;
-				 
-}
 /***************状态机应用层结束************************/
 
 /********************************应用层结束**************************************/
@@ -529,14 +547,9 @@ void version_printf(void)
     appPrintf(LOG_NOTIC, "COMMIT_HASH:%s\r\n", __COMMIT_HASH__);
 }
 
-extern int32_t test;
-extern uint32_t test_pwm;
-
 void app_Init(void)
 {
     // 系统初始化
-		cmt_spi3_init();	//433初始化
-	
     DEBUG_USART_Config(); // 将串口配置成日志口
     version_printf();     // 打印版本信息
 
@@ -546,74 +559,21 @@ void app_Init(void)
     user_key_Init();   // 初始化按键
     user_led_init();   // 初始化LED
     power_gpio_init(); // 初始化电源控制
+    cmt_spi3_init();   // 433初始化
 
     // 模块初始化
     bat_init(); // 初始化电池
-		
-		RF_Init();
-    // set_bldc_power_enable(true);            // 设置BLDC供电使能
-    // bldc_app_init();                        // 初始化BLDC电机
-    // bldc_set_gear((BLDC_Gear_t)app_state.gear); // 设置BLDC档位
-}
-
-uint8_t Radio_Recv_FixedLen(uint8_t pBuf[],uint8_t len)
-{
-#ifdef ENABLE_ANTENNA_SWITCH
-	      if(CMT2300A_ReadGpio3())  /* Read INT2, PKT_DONE */
-#else
-				if(CMT2300A_ReadGpio1()) /* Read INT1, SYNC OK */
-				{
-				  /******/
-				}
-        if(CMT2300A_ReadGpio2())  /* Read INT2, PKT_DONE */
-#endif	
-		   {
-//        if(CMT2300A_MASK_PKT_OK_FLG & CMT2300A_ReadReg(CMT2300A_CUS_INT_FLAG))  /* Read PKT_OK flag */
-				 {
-						CMT2300A_GoStby();
-						CMT2300A_ReadFifo(pBuf,len);
-						CMT2300A_ClearRxFifo();
-						CMT2300A_ClearInterruptFlags();
-						CMT2300A_GoRx();
-						
-						return 1;
-				 }
-		   }
-
-		return 0;
-}
-
-void radio_Recv(void)
-{
-
-	 if(Radio_Recv_FixedLen(RxBuffer,RF_PACKET_SIZE))
-			 {
-				  g_nRfRxtimeoutCount=0;  //清除 Time Out计数
-				  g_nRecvCount++;
-					app_RF_Recv_handle();
-
-			 }
-        
-       if(g_nRfRxtimeoutCount>RF_RX_TIMEOUT) //根据实际应用可以调整Time Out
-			 {
-				  g_nRfRxtimeoutCount=0;
-					CMT2300A_GoSleep();
-					CMT2300A_GoStby();
-					CMT2300A_ClearInterruptFlags();
-					CMT2300A_ClearRxFifo();
-					CMT2300A_GoRx();
-			 }				 
+    RF_Init();
 }
 
 void app_lication(void)
 {
     while (1)
     {
-        // Log("test:%d, test_pwm:%d speed:%dRPM\r\n", test, test_pwm, BLDC_COMP_GetSpeed());
         user_key_handle();    // 按键处理函数
         user_led_handle();    // LED处理函数
         low_power_handle();   // 低电处理
         app_machine_handle(); // 状态机处理函数
-				radio_Recv();					//接收天线处理函数
+        app_RF_Recv_handle();  // RF接收处理函数
     }
 }
