@@ -1,7 +1,7 @@
 #include "bat.h"
 #include "adc.h"
 #include "common.h"
-
+#include "stdio.h"
 /*========================= 私有变量 =========================*/
 static CircularQueue batteryVoltageQueue; // 电压采样队列
 
@@ -49,9 +49,9 @@ uint16_t bat_get_voltage_mv(void)
     if (currentTime - lastPrintTime >= 1000)
     {
         lastPrintTime = currentTime;
-        batPrintf(LOG_DEBUG, "adc_vol:%f \r\n", adc_vol);
-        adcPrintf(LOG_DEBUG, "bat_vol: %f V\r\n", bat_vol);
-        adcPrintf(LOG_NOTIC, "avg_bat_vol_mV: %d mV\r\n", avg_bat_vol_mV);
+//        printf("adc_vol:%f \r\n", adc_vol);
+//        printf("bat_vol: %f V\r\n", bat_vol);
+        printf("avg_bat_vol_mV: %d mV\r\n", avg_bat_vol_mV);
     }
 
     // 返回移动平均值（单位：mV）

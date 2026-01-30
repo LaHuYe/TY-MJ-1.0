@@ -74,7 +74,7 @@ typedef enum
 
 #define LEDn                               1
 
-#define LED3_PIN                           GPIO_PIN_1
+#define LED3_PIN                           GPIO_PIN_2
 #define LED3_GPIO_PORT                     GPIOA
 #define LED3_GPIO_CLK_ENABLE()             __HAL_RCC_GPIOA_CLK_ENABLE()
 #define LED3_GPIO_CLK_DISABLE()            __HAL_RCC_GPIOA_CLK_DISABLE()
@@ -125,10 +125,10 @@ typedef enum
                                                      UNUSED(tmpreg); \
                                                    } while(0U)
 
-#define DEBUG_USART_RX_GPIO_PORT                GPIOB
-#define DEBUG_USART_RX_GPIO_CLK_ENABLE()        __HAL_RCC_GPIOB_CLK_ENABLE()
-#define DEBUG_USART_RX_PIN                      GPIO_PIN_5
-#define DEBUG_USART_RX_AF                       GPIO_AF1_USART1
+//#define DEBUG_USART_RX_GPIO_PORT                GPIOB
+//#define DEBUG_USART_RX_GPIO_CLK_ENABLE()        __HAL_RCC_GPIOB_CLK_ENABLE()
+//#define DEBUG_USART_RX_PIN                      GPIO_PIN_5
+//#define DEBUG_USART_RX_AF                       GPIO_AF1_USART1
 
 #define DEBUG_USART_TX_GPIO_PORT                GPIOB
 #define DEBUG_USART_TX_GPIO_CLK_ENABLE()        __HAL_RCC_GPIOB_CLK_ENABLE()

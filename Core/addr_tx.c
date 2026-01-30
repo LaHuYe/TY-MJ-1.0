@@ -9,7 +9,7 @@
  * ***********************************************************
  */
 #include "addr_tx.h"
-#include "log.h"
+#include "stdio.h"
 #include "main.h"
 #include <stddef.h>
 #include <stdbool.h>
@@ -122,7 +122,7 @@ void addr_tx_init(void)
     // 初始化状态
     reset_tx_parameters();
 
-    appPrintf(LOG_DEBUG, "Address TX initialized\r\n");
+    printf("Address TX initialized\r\n");
 }
 
 /**
@@ -200,7 +200,7 @@ void addr_tx_process(void)
                 if (tx_repeat_done >= TX_REPEAT_COUNT)
                 {
                     // 达到重复次数，结束发送
-                    appPrintf(LOG_DEBUG, "Address TX completed (x%d): 0x%02X%02X\r\n",
+                    printf("Address TX completed (x%d): 0x%02X%02X\r\n",
                               TX_REPEAT_COUNT, tx_buffer[0], tx_buffer[1]);
                     set_tx_pin(GPIO_PIN_RESET); // 保持低电平
                     reset_tx_parameters();      // 重置发送参数
@@ -264,7 +264,7 @@ bool addr_tx_enable(const uint8_t *addr)
     tx_bit_count = 0; // 重置位计数
     set_current_bit_duration(); // 预置首位时序
 
-    appPrintf(LOG_DEBUG, "Address TX enabled (x%d): 0x%02X%02X\r\n",
+    printf("Address TX enabled (x%d): 0x%02X%02X\r\n",
               TX_REPEAT_COUNT, tx_buffer[0], tx_buffer[1]);
 
     return true;

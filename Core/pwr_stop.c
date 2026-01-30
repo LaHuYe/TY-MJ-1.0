@@ -109,7 +109,8 @@ static void pwr_wakeUp_Init(void)
     user_led_init();      // LED初始化
     encoder_init();       // 编码器初始化
     addr_tx_init();       // 地址发送初始化
-    // DEBUG_USART_Config(); // 将串口配置成日志口
+    DEBUG_USART_Config(); // 将串口配置成日志口
+		RF_Init();
 }
 
 static void sleep_confing(void)

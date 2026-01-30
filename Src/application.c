@@ -1,4 +1,10 @@
 #include "application.h"
+#include "typedefs.h"
+
+#include "cmt2300a_hal.h"
+#include "cmt2300a.h"
+#include "cmt_spi3.h"
+#include "stdio.h"
 
 /*****************初始化层*******************/
 app_state_t app_state = {
@@ -7,6 +13,7 @@ app_state_t app_state = {
 
 };
 
+uint8_t	TX_Buffer[RF_PACKET_SIZE];		//
 /****************************应用层*********************************/
 
 /******************** KEY 应用事件开始*****************/
@@ -18,7 +25,7 @@ app_state_t app_state = {
  */
 void key_power_shortPress(void)
 {
-    Log("key_power_shortPress\r\n");
+    printf("key_power_shortPress\r\n");
     if (app_state.state != APP_STATE_WORK)
         return;
 
@@ -26,6 +33,11 @@ void key_power_shortPress(void)
     LED_EventAdd(LED_EVENT_KEY_PRESS);   // 添加按键事件
 
     // TODO 发送电机启动命令
+		TX_Buffer[3] = 0x00;
+		TX_Buffer[4] = 0x10;		//启动指令
+		TX_Buffer[5]=(TX_Buffer[0]+TX_Buffer[1]+TX_Buffer[2]+TX_Buffer[3]+TX_Buffer[4])&0xFF;
+	
+		Radio_Send_FixedLen(TX_Buffer,RF_PACKET_SIZE);	//发射
 }
 
 /**
@@ -35,13 +47,18 @@ void key_power_shortPress(void)
  */
 void key_power_dbclPress(void)
 {
-    Log("key_power_dbclPress\r\n");
+    printf("key_power_dbclPress\r\n");
     if (app_state.state != APP_STATE_WORK)
         return;
 
     app_state.work_time = HAL_GetTick(); // 记录工作时间戳
 
     // TODO 发送电机停止命令
+		TX_Buffer[3] = 0x00;
+		TX_Buffer[4] = 0x40;		//待机指令
+		TX_Buffer[5]=(TX_Buffer[0]+TX_Buffer[1]+TX_Buffer[2]+TX_Buffer[3]+TX_Buffer[4])&0xFF;
+	
+		Radio_Send_FixedLen(TX_Buffer,RF_PACKET_SIZE);	//发射
 }
 
 /**
@@ -51,9 +68,14 @@ void key_power_dbclPress(void)
  */
 void key_power_longPress(void)
 {
-    Log("key_power_longPress\r\n");
+    printf("key_power_longPress\r\n");
 
     // TODO 发送主机关机命令
+		TX_Buffer[3] = 0x00;
+		TX_Buffer[4] = 0x80;		//关机指令
+		TX_Buffer[5]=(TX_Buffer[0]+TX_Buffer[1]+TX_Buffer[2]+TX_Buffer[3]+TX_Buffer[4])&0xFF;
+	
+		Radio_Send_FixedLen(TX_Buffer,RF_PACKET_SIZE);	//发射
 }
 
 /**
@@ -63,7 +85,7 @@ void key_power_longPress(void)
  */
 void key_power_insert_longPress(void)
 {
-    Log("key_power_insert_longPress\r\n");
+    printf("key_power_insert_longPress\r\n");
     // TODO 发送遥控器地址，调用addr_tx_enable即可发送
     LED_EventAdd(LED_EVENT_CHARGING);     // 添加充电事件
     app_state.low_power_flag = false;     // 设置低电关机标志位为false
@@ -77,7 +99,7 @@ void key_power_insert_longPress(void)
  */
 void key_power_insert_releasePress(void)
 {
-    Log("key_power_insert_releasePress\r\n");
+    printf("key_power_insert_releasePress\r\n");
     // 充电状态或充电满状态，拔出充电线，进入休眠状态
     if (app_state.state == APP_STATE_CHARGING || app_state.state == APP_STATE_FULL)
     {
@@ -93,7 +115,7 @@ void key_power_insert_releasePress(void)
  */
 void key_full_longPress(void)
 {
-    Log("key_full_longPress\r\n");
+    printf("key_full_longPress\r\n");
     if (app_state.state == APP_STATE_CHARGING)
     {
         app_state.full_charging_flag = true;          // 设置充电满标志位
@@ -108,7 +130,7 @@ void key_full_longPress(void)
  */
 void key_full_releasePress(void)
 {
-    Log("key_full_releasePress\r\n");
+    printf("key_full_releasePress\r\n");
     if (app_state.state == APP_STATE_CHARGING)
     {
         app_state.full_charging_flag = false; // 设置充电满标志位
@@ -159,6 +181,8 @@ uint8_t led_full_handler(LED_Config_t *led_config)
 // 获取编码器处理
 void encoder_process(void)
 {
+		
+		
     encoder_mode_t mode = encoder_get_mode();
     if (mode != ENCODER_MODE_NONE)
     {
@@ -168,22 +192,29 @@ void encoder_process(void)
         {
             // 减少转速
             app_state.speed -= 23;
-            if (app_state.speed < 500)
-            {
-                app_state.speed = 500;
-            }
+//            if (app_state.speed < 500)
+//            {
+//                app_state.speed = 500;
+//            }
+						TX_Buffer[3] = 0x20;
+						TX_Buffer[4] = 0x00;
         }
         else if (mode == ENCODER_MODE_CCW)
         {
             // 增加转速
             app_state.speed += 23;
-            if (app_state.speed > 2800)
-            {
-                app_state.speed = 2800;
-            }
+//            if (app_state.speed > 2800)
+//            {
+//                app_state.speed = 2800;
+//            }
+						TX_Buffer[3] = 0x10;
+						TX_Buffer[4] = 0x00;
         }
+				
+				TX_Buffer[5]=(TX_Buffer[0]+TX_Buffer[1]+TX_Buffer[2]+TX_Buffer[3]+TX_Buffer[4])&0xFF;
 
         // TODO 发送转速命令
+				Radio_Send_FixedLen(TX_Buffer,RF_PACKET_SIZE);
     }
 }
 
@@ -191,7 +222,7 @@ void encoder_process(void)
 void bat_process(void)
 {
     uint16_t bat_vol_mv = bat_get_voltage_mv();
-    Log("bat_vol_mv:%d\r\n", bat_vol_mv);
+//    printf("bat_vol_mv:%d\r\n", bat_vol_mv);
     /* 电池电压处理 */
     if (bat_vol_mv <= BAT_VOL_OFF - 5)
     {
@@ -230,7 +261,7 @@ void bat_process(void)
 static void device_sleep_handle(void)
 {
     // 直接进入休眠模式
-    appPrintf(LOG_NOTIC, "device sleep\r\n");
+    printf("device sleep\r\n");
     // TODO 发送睡眠命令
     LED_EventAllDelete();                // 删除所有LED事件
     mcu_enter_sleep();                   // 进入休眠模式
@@ -239,7 +270,7 @@ static void device_sleep_handle(void)
         app_state.state = APP_STATE_WORK;    // 进入工作状态
         app_state.work_time = HAL_GetTick(); // 记录工作时间戳
     }
-    appPrintf(LOG_NOTIC, "device wakeup\r\n");
+    printf("device wakeup\r\n");
 }
 
 /**
@@ -301,7 +332,7 @@ void app_machine_handle(void)
     if (lst_state != app_state.state)
     {
         lst_state = app_state.state;
-        appPrintf(LOG_NOTIC, "app_state.state:%d\r\n", app_state.state);
+        printf("app_state.state:%d\r\n", app_state.state);
     }
 
     switch (app_state.state)
@@ -332,7 +363,16 @@ void app_machine_handle(void)
 
 void version_printf(void)
 {
-    appPrintf(LOG_NOTIC, "Version:%s\r\n", __VERSION__);
+    printf("Version:%s\r\n", __VERSION__);
+}
+void Tx_Buffer_init(void)
+{
+		TX_Buffer[0] = 0xAA;
+		TX_Buffer[1] = ADDR0;
+		TX_Buffer[2] = ADDR1;
+		TX_Buffer[3] = 0x00;
+		TX_Buffer[4] = 0x00;
+		TX_Buffer[5]=(TX_Buffer[0]+TX_Buffer[1]+TX_Buffer[2]+TX_Buffer[3]+TX_Buffer[4])&0xFF;
 }
 
 void app_Init(void)
@@ -347,8 +387,11 @@ void app_Init(void)
     addr_tx_init();  // 地址发送初始化
     // TODO 添加RF初始化
     // iwdg_Init();          // 看门狗初始化
-    // DEBUG_USART_Config(); // 将串口配置成日志口
+    DEBUG_USART_Config(); // 将串口配置成日志口
     version_printf();     // 版本打印
+	
+		RF_Init();
+		Tx_Buffer_init();
 }
 
 void app_lication(void)

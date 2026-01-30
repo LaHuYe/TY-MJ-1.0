@@ -11,6 +11,7 @@
 #include "led.h"
 #include "tim.h"
 #include "led_manager.h"
+#include "stdio.h"
 
 static LED_EventTableItem_t ledPriorityTable[PRIORITY_MAX];
 static LED_EventTableItem_t ledEventTable[LED_EVENT_MAX];
@@ -34,7 +35,7 @@ void LED_EventTableInit(LED_EventTableItem_t ledEvent[])
 {
     if (ledEvent == NULL)
     {
-        ledPrintf(LOG_ERROR, "ledEvent is NULL\r\n");
+        printf("ledEvent is NULL\r\n");
         return;
     }
     memset(ledPriorityTable, 0, sizeof(ledPriorityTable));
@@ -45,7 +46,7 @@ void LED_EventTableInit(LED_EventTableItem_t ledEvent[])
 // 将LED事件加入事件表
 void LED_EventAdd(LED_Event_t ledEvent)
 {
-    Log("LED_EventAdd: %d\r\n", ledEvent);
+//    printf("LED_EventAdd: %d\r\n", ledEvent);
     for (size_t i = 0; i < LED_EVENT_MAX; i++)
     {
         if (ledEventTable[i].event == ledEvent)
@@ -57,7 +58,7 @@ void LED_EventAdd(LED_Event_t ledEvent)
                 {
                     if (LED_SetState == NULL)
                     {
-                        ledPrintf(LOG_ERROR, "LED_SetState is NULL!!!\r\n");
+//                        printf("LED_SetState is NULL!!!\r\n");
                         return;
                     }
                     LED_SetState((ledPriorityTable[ledEventTable[i].priority].config.ledMask) ^ (ledEventTable[i].config.ledMask), LED_OFF);
@@ -88,7 +89,7 @@ void LED_EventDelete(LED_Event_t ledEvent)
             memset(&ledPriorityTable[i], 0, sizeof(LED_EventTableItem_t));
             if (LED_SetState == NULL)
             {
-                ledPrintf(LOG_ERROR, "LED_SetState is NULL!!!\r\n");
+                printf("LED_SetState is NULL!!!\r\n");
                 return;
             }
             LED_SetState(ledEventTable[ledEvent].config.ledMask, LED_OFF);
@@ -106,7 +107,7 @@ void LED_EventHandle(void)
     { // 从高优先级开始往下查询
         if (ledPriorityTable[i].event != 0)
         {
-            ledPrintf(LOG_NOTIC, "led_priority_table[%d].event %d\r\n", i, ledPriorityTable[i].event);
+            //printf("led_priority_table[%d].event %d\r\n", i, ledPriorityTable[i].event);
             ret = ledPriorityTable[i].ledEventHandler(&ledPriorityTable[i].config); // 执行对应LED事件处理函数
             // 正在执行事件功能返回1，执行完事件功能返回0，例：每30秒闪烁1次，闪烁的1s里返回1，闪烁完成返回0，目的是使间隔的30秒内可以运行别的LED事件
             if (ret)

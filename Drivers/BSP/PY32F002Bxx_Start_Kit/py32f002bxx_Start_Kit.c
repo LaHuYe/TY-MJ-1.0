@@ -253,7 +253,7 @@ void BSP_USART_Config(void)
 
   /**USART GPIO Configuration
     PB4     ------> USART1_TX
-    PB5     ------> USART1_RX
+    //PB5     ------> USART1_RX
     */
   GPIO_InitStruct.Pin = DEBUG_USART_TX_PIN;
   GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;

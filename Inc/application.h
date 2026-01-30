@@ -11,11 +11,11 @@
 #include "main.h"
 #include "tim.h"
 #include "pwr_stop.h"
+#include "radio.h"
+
 
 // JSM是项目编号，06是硬件版本（如换板子等）06是软件大版本，009是软件小版本
 #define __VERSION__     "MJ-1.0_Remote_00.00.001"
-#define __EMAIL__       "1917507415@qq.com"
-#define __COMMIT_HASH__ "ebd4c62979a36cd0e0eb0bab7002012b76c2e932"
 
 /*========================= 宏定义 =========================*/
 #define BAT_VOL_LOW  3400 // 电池低电提醒阈值
@@ -41,6 +41,9 @@ typedef struct
     uint32_t charging_full_time; // 充电满时间戳
     uint32_t speed;              // 转速
 } app_state_t;
+
+#define	ADDR0		0x33
+#define	ADDR1		0x33
 
 void app_Init(void);
 void app_lication(void);
