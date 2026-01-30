@@ -182,8 +182,8 @@ extern uint8_t lptim_flag;
 
 // SDIO引脚
 #define CMT2300A_SDIO_PIN               GPIO_PIN_4
-#define CMT2300A_SDIO_GPIO_PORT         GPIOB
-#define CMT2300A_SDIO_GPIO_CLK_ENABLE() __HAL_RCC_GPIOB_CLK_ENABLE();
+#define CMT2300A_SDIO_GPIO_PORT         GPIOA
+#define CMT2300A_SDIO_GPIO_CLK_ENABLE() __HAL_RCC_GPIOA_CLK_ENABLE();
 
 // FCSB引脚
 #define CMT2300A_FCSB_PIN               GPIO_PIN_6

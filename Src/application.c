@@ -307,12 +307,13 @@ void stuck_handle(void)
  */
 void app_RF_Recv_handle()
 {
+
     // 充电状态或充电满状态，不进行接收
-    if (app_state.state != APP_STATE_CHARGING && app_state.state != APP_STATE_FULL_CHARGING)
+    if (app_state.state == APP_STATE_CHARGING || app_state.state == APP_STATE_FULL_CHARGING)
     {
         return;
     }
-
+    
     // 接收天线处理
     radio_recv_handle();
 
@@ -324,13 +325,13 @@ void app_RF_Recv_handle()
     {
         return;   
     }
-
+    
     // 计算校验和，用于校验接收到的数据是否正确
     uint8_t sum = 0;
 
     // 打印接收到的数据
     Log("recv:");
-    for (size_t i = 0; i < RF_PACKET_SIZE; i++)
+    for (size_t i = 0; i < RF_PACKET_SIZE - 1; i++)
     {
         sum += RxBuffer[i];
         Log("0x%02x ", RxBuffer[i]);
