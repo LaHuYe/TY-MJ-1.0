@@ -12,9 +12,9 @@ static app_state_t app_state = {
 };
 extern CircularQueue s_modeCheckQueue;
 #define RF_RX_TIMEOUT    1000*60*60      //60min
-#define RF_PACKET_SIZE   32               /* Define the payload size here */
+#define RF_PACKET_SIZE   6               /* Define the payload size here */
 
-static uint8_t g_rxBuffer[RF_PACKET_SIZE];   /* RF Rx buffer */
+static uint8_t RxBuffer[RF_PACKET_SIZE];   /* RF Rx buffer */
 
 char str[32];
 uint32_t g_nRecvCount=0,g_nSendCount=0;
@@ -442,6 +442,79 @@ void app_machine_handle(void)
     }
 }
 
+/**
+ * @brief   应用状态机处理
+ * @param   none
+ * @return  none
+ * @note    应用状态机处理
+ */
+void app_RF_Recv_handle()
+{
+		uint8_t	i = 0;
+		uint8_t	sum = 0;
+	
+		printf("recv:%d  0x%u  0x%u 0x%u 0x%u 0x%u 0x%u\n", g_nRecvCount,RxBuffer[0],RxBuffer[1],RxBuffer[2],RxBuffer[3],RxBuffer[4],RxBuffer[5]);
+		
+		sum = (RxBuffer[0] + RxBuffer[1] + RxBuffer[2] + RxBuffer[3] + RxBuffer[4])&0xFF;
+		
+		if((RxBuffer[0] == 0xAA)&&(RxBuffer[5] == sum))
+		{
+			if(RxBuffer[3] == 0x10)
+			{
+				//加速.
+				 app_state.gear++;
+				// 档位最大为BLDC_GEAR_100
+				if (app_state.gear >= BLDC_GEAR_MAX)
+				{
+					app_state.gear = BLDC_GEAR_100;
+				}
+				bldc_set_gear((BLDC_Gear_t)app_state.gear);
+				LED_EventAdd(LED_EVENT_KEY_OPERATION); 
+			}
+			else if(RxBuffer[2] == 0x10)
+			{
+				//减速
+				app_state.gear--;
+				// 档位最大为BLDC_GEAR_100
+				if (app_state.gear <= BLDC_GEAR_1)
+				{
+					app_state.gear = BLDC_GEAR_1;
+				}
+				bldc_set_gear((BLDC_Gear_t)app_state.gear);
+				LED_EventAdd(LED_EVENT_KEY_OPERATION); 
+			}
+			
+			if(RxBuffer[4] == 0x10)
+			{
+				if(app_state.state != APP_STATE_MUSCLE_GUN)
+				{
+					//启动
+					set_bldc_power_enable(true);            // 设置BLDC供电使能
+					bldc_app_init();                        // 初始化BLDC电机
+					app_state.state = APP_STATE_MUSCLE_GUN; // 进入筋膜枪状
+					bldc_set_gear((BLDC_Gear_t)app_state.gear); // 设置BLDC档位
+					LED_EventAdd(LED_EVENT_KEY_OPERATION);      // 添加按键操作事件
+				}
+			}
+			else if(RxBuffer[4] == 0x40)
+			{
+				//待机
+				set_bldc_power_enable(false); 
+				app_state.state = APP_STATE_STARTUP; 
+				app_close_all_device(); 
+			}
+			else if(RxBuffer[4] == 0x80)
+			{
+				//关机
+				app_state.state = APP_STATE_SLEEP;
+				device_sleep_handle();
+			}
+			
+		}
+		for(i=0;i<RF_PACKET_SIZE;i++) //Clear Buff
+				RxBuffer[i]=0;
+				 
+}
 /***************状态机应用层结束************************/
 
 /********************************应用层结束**************************************/
@@ -482,6 +555,7 @@ void app_Init(void)
     // bldc_app_init();                        // 初始化BLDC电机
     // bldc_set_gear((BLDC_Gear_t)app_state.gear); // 设置BLDC档位
 }
+
 uint8_t Radio_Recv_FixedLen(uint8_t pBuf[],uint8_t len)
 {
 #ifdef ENABLE_ANTENNA_SWITCH
@@ -508,21 +582,17 @@ uint8_t Radio_Recv_FixedLen(uint8_t pBuf[],uint8_t len)
 
 		return 0;
 }
+
 void radio_Recv(void)
 {
-		uint8_t	i = 0;
-	
-	 if(Radio_Recv_FixedLen(g_rxBuffer,RF_PACKET_SIZE))
+
+	 if(Radio_Recv_FixedLen(RxBuffer,RF_PACKET_SIZE))
 			 {
 				  g_nRfRxtimeoutCount=0;  //清除 Time Out计数
 				  g_nRecvCount++;
-          printf("recv: %d %s", g_nRecvCount,g_rxBuffer);
-				 
-			    for(i=0;i<RF_PACKET_SIZE;i++) //Clear Buff
-				   g_rxBuffer[i]=0;
-				 
-			 }
+					app_RF_Recv_handle();
 
+			 }
         
        if(g_nRfRxtimeoutCount>RF_RX_TIMEOUT) //根据实际应用可以调整Time Out
 			 {

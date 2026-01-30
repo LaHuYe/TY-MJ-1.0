@@ -459,6 +459,26 @@
               <FileType>1</FileType>
               <FilePath>..\Core\addr_rx.c</FilePath>
             </File>
+            <File>
+              <FileName>cmt_spi3.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Src\cmt_spi3.c</FilePath>
+            </File>
+            <File>
+              <FileName>cmt2300a.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Src\cmt2300a.c</FilePath>
+            </File>
+            <File>
+              <FileName>cmt2300a_hal.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Src\cmt2300a_hal.c</FilePath>
+            </File>
+            <File>
+              <FileName>radio.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Src\radio.c</FilePath>
+            </File>
           </Files>
         </Group>
         <Group>
