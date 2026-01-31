@@ -2,7 +2,7 @@
 #include "application.h"
 #include "cmt2300a.h"
 #include "cmt_spi3.h"
-#include	"radio.h"
+#include "radio.h"
 
 extern ADC_HandleTypeDef AdcHandle;
 extern DMA_HandleTypeDef HdmaCh1;
@@ -75,7 +75,7 @@ void DeInit_Peripherals(void)
     __HAL_TIM_DISABLE_IT(&Tim16Handle, TIM_IT_UPDATE);
     HAL_TIM_Base_DeInit(&Tim16Handle);
 
-    __HAL_RCC_TIM1_CLK_DISABLE(); /* Disable TIM1 clock */
+    __HAL_RCC_TIM1_CLK_DISABLE();  /* Disable TIM1 clock */
     __HAL_RCC_TIM3_CLK_DISABLE();  /* Disable TIM1 clock */
     __HAL_RCC_TIM16_CLK_DISABLE(); /* Disable TIM16 clock */
     __HAL_RCC_ADC_FORCE_RESET();
@@ -104,23 +104,23 @@ void Set_GPIO_LowPower(void)
     // 设置全部IO浮空输入
     GPIO_InitTypeDef GPIO_InitStruct;
     __HAL_RCC_GPIOA_CLK_ENABLE();
-    GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;                                     /* GPIO mode set to falling edge interrupt */
-    GPIO_InitStruct.Pull = GPIO_NOPULL;                                          /* Pull-up */
-    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;                                 /* High-speed */
+    GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;     /* GPIO mode set to falling edge interrupt */
+    GPIO_InitStruct.Pull = GPIO_NOPULL;          /* Pull-up */
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW; /* High-speed */
     GPIO_InitStruct.Pin = GPIO_PIN_All;
     HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
     __HAL_RCC_GPIOB_CLK_ENABLE();
-    GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;                                /* GPIO mode set to falling edge interrupt */
-    GPIO_InitStruct.Pull = GPIO_NOPULL;                                     /* Pull-up */
-    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;                            /* High-speed */
+    GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;     /* GPIO mode set to falling edge interrupt */
+    GPIO_InitStruct.Pull = GPIO_NOPULL;          /* Pull-up */
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW; /* High-speed */
     GPIO_InitStruct.Pin = GPIO_PIN_All;
     HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
     __HAL_RCC_GPIOF_CLK_ENABLE();
-    GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;               /* GPIO mode set to falling edge interrupt */
-    GPIO_InitStruct.Pull = GPIO_NOPULL;                    /* Pull-up */
-    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;           /* High-speed */
+    GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;     /* GPIO mode set to falling edge interrupt */
+    GPIO_InitStruct.Pull = GPIO_NOPULL;          /* Pull-up */
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW; /* High-speed */
     GPIO_InitStruct.Pin = GPIO_PIN_All;
     HAL_GPIO_Init(GPIOF, &GPIO_InitStruct);
 }
@@ -128,15 +128,14 @@ void Set_GPIO_LowPower(void)
 static void pwr_wakeUp_Init(void)
 {
     DEBUG_USART_Config(); // 将串口配置成日志口
-
+    reset_decode_parameters(); // 重置解码参数
     // 外设初始化
     adc_Init();        // 初始化ADC
     All_Tim_Init();    // 初始化定时器（TIM1, TIM3, TIM16）
     user_led_init();   // 初始化LED
     power_gpio_init(); // 初始化电源控制
-	
-		cmt_spi3_init();	//433初始化
-		RF_Init();
+    // cmt_spi3_init();   // 433IO口初始化
+    // RF_Init();         // 433配置与寄存器初始化
 }
 
 static void sleep_confing(void)
@@ -150,7 +149,7 @@ static void sleep_confing(void)
 
 static void wakeUp_confing(void)
 {
-    pwr_wakeUp_Init();               // GPIO初始化
+    pwr_wakeUp_Init(); // GPIO初始化
 }
 
 void LowPower_SystemClockConfig(void)
@@ -247,9 +246,9 @@ void mcu_enter_sleep(void)
     Norm_SystemClockConfig();
     /* Resume the SysTick interrupt */
     HAL_ResumeTick();
-     // 禁用LPTIM
+    // 禁用LPTIM
     // __HAL_LPTIM_DISABLE(&LPTIMConf);
-    HAL_Delay(20);
+    // HAL_Delay(20);
     // 唤醒配置
     wakeUp_confing();
 }

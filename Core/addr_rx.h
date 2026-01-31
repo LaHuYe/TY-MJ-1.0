@@ -15,15 +15,8 @@
 #include "main.h"
 #include <stdbool.h>
 
-/**
- * @brief 初始化地址接收
- */
-void addr_rx_init(void);
 
-/**
- * @brief 反初始化地址接收
- */
-void addr_rx_deinit(void);
+void reset_decode_parameters(void);
 
 /**
  * @brief 地址接收解码函数（100us调用一次，需要在定时器中断中调用）

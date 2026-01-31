@@ -10,6 +10,8 @@ static app_state_t app_state = {
     .state = APP_STATE_SLEEP,
     .gear = 1, // 默认档位为1
 };
+// 接收到的地址
+static uint8_t received_address[2] = {0};
 void app_close_all_device(void);
 /****************** 初始化层开始*******************/
 /****************** KEY 应用事件开始*****************/
@@ -300,6 +302,25 @@ void stuck_handle(void)
 }
 
 /**
+ * @brief   地址接收处理
+ * @param   none
+ * @return  none
+ * @note    地址接收处理
+ */
+void addr_rx_handle(void)
+{
+    if (addr_rx_get_received_address(received_address)) // 获取接收到的地址
+    {
+        app_state.startup_flag = false;            // 关闭开机标志位
+        app_close_all_device();                    // 关闭所有外设
+        LED_EventAdd(LED_EVENT_CHARGING);          // 添加充电事件
+        app_state.low_power_shutdown_flag = false; // 设置低电关机标志位为false
+        app_state.low_power_start_time = 0;        // 清零低电开始时间戳
+        app_state.state = APP_STATE_CHARGING;      // 设置应用状态为充电状态
+    }
+}
+
+/**
  * @brief   应用RF接收处理
  * @param   none
  * @return  none
@@ -313,7 +334,7 @@ void app_RF_Recv_handle()
     {
         return;
     }
-    
+
     // 接收天线处理
     radio_recv_handle();
 
@@ -323,9 +344,9 @@ void app_RF_Recv_handle()
     // 如果接收缓冲区为空，则返回
     if (RxBuffer == NULL)
     {
-        return;   
+        return;
     }
-    
+
     // 计算校验和，用于校验接收到的数据是否正确
     uint8_t sum = 0;
 
@@ -339,7 +360,8 @@ void app_RF_Recv_handle()
     Log("\r\n");
 
     // 校验接收到的数据是否正确
-    if ((RxBuffer[0] == 0xAA) && (RxBuffer[5] == sum))
+    if ((RxBuffer[0] == 0xAA) && (RxBuffer[5] == sum) &&
+        (received_address[0] == RxBuffer[1]) && (received_address[1] == RxBuffer[2]))
     {
         if (RxBuffer[3] == 0x10)
         {
@@ -575,6 +597,7 @@ void app_lication(void)
         user_led_handle();    // LED处理函数
         low_power_handle();   // 低电处理
         app_machine_handle(); // 状态机处理函数
-        app_RF_Recv_handle();  // RF接收处理函数
+        addr_rx_handle();     // 地址接收处理函数
+        app_RF_Recv_handle(); // RF接收处理函数
     }
 }
