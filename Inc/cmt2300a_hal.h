@@ -22,8 +22,7 @@
 #define __CMT2300A_HAL_H
 
 #include "typedefs.h"
-#include "py32f002b_hal_gpio.h"
-#include "py32f0xx_hal.h"
+#include "main.h"
 
 #ifdef __cplusplus 
 extern "C" { 
@@ -32,7 +31,7 @@ extern "C" {
 /* ************************************************************************
 *  The following need to be modified by user
 *  ************************************************************************ */
-#define CMT2300A_ReadGpio1()            HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_1)
+#define CMT2300A_ReadGpio1()            HAL_GPIO_ReadPin(RF_GPIO1_GPIO_PORT, RF_GPIO1_PIN)
 #define CMT2300A_DelayMs(ms)            HAL_Delay(ms)
 #define CMT2300A_DelayUs(us)            system_delay_us(us)
 #define CMT2300A_GetTickCount()         HAL_GetTick()

@@ -17,70 +17,69 @@
  * @date    Jul 17 2017
  * @author  CMOSTEK R@D
  */
- 
+
 #include "cmt2300a_hal.h"
 #include "cmt_spi3.h"
 
-
 /*! ********************************************************
-* @name    CMT2300A_InitGpio
-* @desc    Initializes the CMT2300A interface GPIOs.
-* *********************************************************/
+ * @name    CMT2300A_InitGpio
+ * @desc    Initializes the CMT2300A interface GPIOs.
+ * *********************************************************/
 void CMT2300A_InitGpio(void)
 {
-	GPIO_InitTypeDef  GPIO_InitStruct = {0};
-	GPIO_InitStruct.Pin = GPIO_PIN_1;
-	GPIO_InitStruct.Mode = GPIO_MODE_INPUT;            		/* input */
-	GPIO_InitStruct.Pull = GPIO_PULLUP;                    /* Enable pull-up */
-	GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH; 
-	
-	HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
-	
+    GPIO_InitTypeDef GPIO_InitStruct = {0};
+    GPIO_InitStruct.Pin = RF_GPIO1_PIN;
+    GPIO_InitStruct.Mode = GPIO_MODE_INPUT; /* input */
+    GPIO_InitStruct.Pull = GPIO_PULLUP;     /* Enable pull-up */
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
+
+    HAL_GPIO_Init(RF_GPIO1_GPIO_PORT, &GPIO_InitStruct);
+
     cmt_spi3_init();
 }
 
 /*! ********************************************************
-* @name    CMT2300A_ReadReg
-* @desc    Read the CMT2300A register at the specified address.
-* @param   addr: register address
-* @return  Register value
-* *********************************************************/
+ * @name    CMT2300A_ReadReg
+ * @desc    Read the CMT2300A register at the specified address.
+ * @param   addr: register address
+ * @return  Register value
+ * *********************************************************/
 u8 CMT2300A_ReadReg(u8 addr)
 {
     u8 dat = 0xFF;
     cmt_spi3_read(addr, &dat);
-	
+
     return dat;
 }
 
 /*! ********************************************************
-* @name    CMT2300A_WriteReg
-* @desc    Write the CMT2300A register at the specified address.
-* @param   addr: register address
-*          dat: register value
-* *********************************************************/
+ * @name    CMT2300A_WriteReg
+ * @desc    Write the CMT2300A register at the specified address.
+ * @param   addr: register address
+ *          dat: register value
+ * *********************************************************/
 void CMT2300A_WriteReg(u8 addr, u8 dat)
 {
     cmt_spi3_write(addr, dat);
 }
 
 /*! ********************************************************
-* @name    CMT2300A_ReadFifo
-* @desc    Reads the contents of the CMT2300A FIFO.
-* @param   buf: buffer where to copy the FIFO read data
-*          len: number of bytes to be read from the FIFO
-* *********************************************************/
+ * @name    CMT2300A_ReadFifo
+ * @desc    Reads the contents of the CMT2300A FIFO.
+ * @param   buf: buffer where to copy the FIFO read data
+ *          len: number of bytes to be read from the FIFO
+ * *********************************************************/
 void CMT2300A_ReadFifo(u8 buf[], u16 len)
 {
     cmt_spi3_read_fifo(buf, len);
 }
 
 /*! ********************************************************
-* @name    CMT2300A_WriteFifo
-* @desc    Writes the buffer contents to the CMT2300A FIFO.
-* @param   buf: buffer containing data to be put on the FIFO
-*          len: number of bytes to be written to the FIFO
-* *********************************************************/
+ * @name    CMT2300A_WriteFifo
+ * @desc    Writes the buffer contents to the CMT2300A FIFO.
+ * @param   buf: buffer containing data to be put on the FIFO
+ *          len: number of bytes to be written to the FIFO
+ * *********************************************************/
 void CMT2300A_WriteFifo(const u8 buf[], u16 len)
 {
     cmt_spi3_write_fifo(buf, len);

@@ -13,7 +13,6 @@
 #define ADDR_TX_H
 
 #include "main.h"
-#include <stdbool.h>
 
 /**
  * @brief 地址发送初始化函数（初始化GPIO）
@@ -27,9 +26,10 @@ void addr_tx_process(void);
 
 /**
  * @brief 使能地址发送
- * @param addr 要发送的地址（2字节数组）
+ * @param addr 要发送的地址（4字节数组，32位）
+ * @param len 地址长度（应至少为4）
  * @return true 表示使能成功，false 表示发送忙（上一次发送未完成）
  */
-bool addr_tx_enable(const uint8_t *addr);
+bool addr_tx_enable(const uint8_t *addr, uint8_t len);
 
 #endif /* ADDR_TX_H */

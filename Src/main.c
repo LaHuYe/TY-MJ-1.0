@@ -42,20 +42,6 @@ static void APP_OptionConfig(void);
  * @brief  Main program.
  * @retval int
  */
- /**
-  * @brief  Delayed by NOPS
-  * @param  None
-  * @retval None
-  */
-void APP_DelayNops(uint32_t Nops)			//1ms:	4788
-{
-  for(uint32_t i=0; i<Nops;i++)
-  {
-    __NOP();
-  }
-}
-
- 
 int main(void)
 {
     HAL_Init();
@@ -65,7 +51,7 @@ int main(void)
     {
         APP_OptionConfig();
     }
-    HAL_Delay(1000); // 防止SWD被初始化
+    // HAL_Delay(1000); // 防止SWD被初始化
     app_Init();
     app_lication();
 }
@@ -191,7 +177,7 @@ void Error_Handler(uint8_t *file, uint32_t line)
 {
     while (1)
     {
-        printf("%s %d\r\n", file, line);
+        appPrintf(LOG_ERROR, "%s %d\r\n", file, line);
     }
 }
 

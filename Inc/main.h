@@ -38,20 +38,18 @@ extern "C" {
 #endif
 
 /* Includes ------------------------------------------------------------------*/
+#include "log.h"
 #include "py32f002bxx_Start_Kit.h"
 #include "py32f0xx_hal.h"
 #include <stdbool.h>
 #include <stdint.h>
 #include <string.h>
-#include <stdio.h>
-
 
 /* Private includes ----------------------------------------------------------*/
 /* Private defines -----------------------------------------------------------*/
 /* Exported variables prototypes ---------------------------------------------*/
 /* Exported functions prototypes ---------------------------------------------*/
 
-void APP_DelayNops(uint32_t Nops);
 /**********KEY GPIO*************/
 // 按键检测引脚
 #define KEY_PIN               GPIO_PIN_3
@@ -107,9 +105,31 @@ void APP_DelayNops(uint32_t Nops);
 #define ADDR_TX_PIN               GPIO_PIN_0
 #define ADDR_TX_GPIO_PORT         GPIOB
 #define ADDR_TX_GPIO_CLK_ENABLE() __HAL_RCC_GPIOB_CLK_ENABLE()
-
-#define RF_PACKET_SIZE 6
 /*******************************/
+
+/**************RF GPIO***************/
+#define RF_CSB_PIN               GPIO_PIN_3
+#define RF_CSB_GPIO_PORT         GPIOB
+#define RF_CSB_GPIO_CLK_ENABLE() __HAL_RCC_GPIOB_CLK_ENABLE()
+
+#define RF_FCSB_PIN               GPIO_PIN_5
+#define RF_FCSB_GPIO_PORT         GPIOB
+#define RF_FCSB_GPIO_CLK_ENABLE() __HAL_RCC_GPIOB_CLK_ENABLE()
+
+#define RF_SCLK_PIN               GPIO_PIN_2
+#define RF_SCLK_GPIO_PORT         GPIOB
+#define RF_SCLK_GPIO_CLK_ENABLE() __HAL_RCC_GPIOB_CLK_ENABLE()
+
+#define RF_SDIO_PIN               GPIO_PIN_4
+#define RF_SDIO_GPIO_PORT         GPIOB
+#define RF_SDIO_GPIO_CLK_ENABLE() __HAL_RCC_GPIOB_CLK_ENABLE()
+
+#define RF_GPIO1_PIN               GPIO_PIN_1
+#define RF_GPIO1_GPIO_PORT         GPIOB
+#define RF_GPIO1_GPIO_CLK_ENABLE() __HAL_RCC_GPIOB_CLK_ENABLE()
+
+/**********************************/
+
 
 void Error_Handler(uint8_t *file, uint32_t line);
 uint32_t HAL_GetTickDiff(uint32_t meiosis);

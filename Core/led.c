@@ -9,9 +9,9 @@
  */
 
 #include "led.h"
-#include "tim.h"
 #include "led_manager.h"
-#include "stdio.h"
+#include "tim.h"
+
 
 static LED_EventTableItem_t ledPriorityTable[PRIORITY_MAX];
 static LED_EventTableItem_t ledEventTable[LED_EVENT_MAX];
@@ -35,7 +35,7 @@ void LED_EventTableInit(LED_EventTableItem_t ledEvent[])
 {
     if (ledEvent == NULL)
     {
-        printf("ledEvent is NULL\r\n");
+        ledPrintf(LOG_ERROR, "ledEvent is NULL\r\n");
         return;
     }
     memset(ledPriorityTable, 0, sizeof(ledPriorityTable));
@@ -46,7 +46,6 @@ void LED_EventTableInit(LED_EventTableItem_t ledEvent[])
 // 将LED事件加入事件表
 void LED_EventAdd(LED_Event_t ledEvent)
 {
-//    printf("LED_EventAdd: %d\r\n", ledEvent);
     for (size_t i = 0; i < LED_EVENT_MAX; i++)
     {
         if (ledEventTable[i].event == ledEvent)
@@ -58,7 +57,7 @@ void LED_EventAdd(LED_Event_t ledEvent)
                 {
                     if (LED_SetState == NULL)
                     {
-//                        printf("LED_SetState is NULL!!!\r\n");
+                        ledPrintf(LOG_ERROR, "LED_SetState is NULL!!!\r\n");
                         return;
                     }
                     LED_SetState((ledPriorityTable[ledEventTable[i].priority].config.ledMask) ^ (ledEventTable[i].config.ledMask), LED_OFF);
@@ -89,7 +88,7 @@ void LED_EventDelete(LED_Event_t ledEvent)
             memset(&ledPriorityTable[i], 0, sizeof(LED_EventTableItem_t));
             if (LED_SetState == NULL)
             {
-                printf("LED_SetState is NULL!!!\r\n");
+                ledPrintf(LOG_ERROR, "LED_SetState is NULL!!!\r\n");
                 return;
             }
             LED_SetState(ledEventTable[ledEvent].config.ledMask, LED_OFF);
@@ -107,7 +106,6 @@ void LED_EventHandle(void)
     { // 从高优先级开始往下查询
         if (ledPriorityTable[i].event != 0)
         {
-            //printf("led_priority_table[%d].event %d\r\n", i, ledPriorityTable[i].event);
             ret = ledPriorityTable[i].ledEventHandler(&ledPriorityTable[i].config); // 执行对应LED事件处理函数
             // 正在执行事件功能返回1，执行完事件功能返回0，例：每30秒闪烁1次，闪烁的1s里返回1，闪烁完成返回0，目的是使间隔的30秒内可以运行别的LED事件
             if (ret)
@@ -284,7 +282,7 @@ static uint8_t LED_AlternatingBlinking_Update(LED_Config_t *led)
         {
             // 只点亮当前时间片对应的LED组
             LED_SetState(led->alternatingBlinkParams.Group[i], LED_ON);
-            break;  // 找到对应的时间片后立即退出循环
+            break; // 找到对应的时间片后立即退出循环
         }
     }
     return 1;

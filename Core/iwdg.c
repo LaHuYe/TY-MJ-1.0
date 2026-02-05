@@ -1,5 +1,4 @@
 #include "iwdg.h"
-#include "stdio.h"
 
 IWDG_HandleTypeDef IwdgHandle = {0};
 
@@ -11,7 +10,7 @@ void iwdg_Init(void)
     /* Initialize IWDG */
     if (HAL_IWDG_Init(&IwdgHandle) != HAL_OK)
     {
-        printf("IWDG Init Failed");
+        iwdgPrintf(LOG_ERROR, "IWDG Init Failed");
     }
     iwdg_FeedDog();
 }
@@ -21,6 +20,6 @@ void iwdg_FeedDog(void)
     /* Refresh the watchdog */
     if (HAL_IWDG_Refresh(&IwdgHandle) != HAL_OK)
     {
-        printf("IWDG FeedDog Failed");
+        iwdgPrintf(LOG_ERROR, "IWDG FeedDog Failed");
     }
 }

@@ -86,8 +86,8 @@
 ;---------------------------------------
 ********************************************************/
 /* [CMT Bank] */
-#include "typedefs.h"
 #include "cmt2300a_defs.h"
+#include "main.h"
 
 const u8 g_cmt2300aCmtBank[CMT2300A_CMT_BANK_SIZE] = {
     0x00,

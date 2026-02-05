@@ -11,8 +11,6 @@
 
 #include "key.h"
 #include <math.h>
-#include "main.h"
-
 
 uint32_t keyCountTime;           // 计时器
 uint8_t keyNum = KEY_NUM;        // 按键数量
@@ -247,7 +245,6 @@ void setKeyEventParams(uint8_t key_event, keyCategory_t key_param)
  * @param  None
  * @retval None
  */
-
 void keyHandle(void)
 {
     for (size_t i = 0; i < keyNum; i++)
@@ -267,8 +264,7 @@ void keyHandle(void)
             if (keyTable[i].func.ShortPressCb == NULL)
                 break;
             keyTable[i].func.ShortPressCb();
-            keyTable[i].fsm.eventType = NULL_Event;
-						
+            keyTable[i].fsm.eventType = NULL_Event;		
             break;
         case DOWN_Event:
             if (keyTable[i].func.downPressCb == NULL)
