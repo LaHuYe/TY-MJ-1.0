@@ -72,7 +72,7 @@ void user_led_init(void)
         [LED_EVENT_REMOTE_CHARGING] = {
             // 遥控器充电LED常亮。
             .event = LED_EVENT_REMOTE_CHARGING,
-            .priority = PRIORITY_2,
+            .priority = PRIORITY_3,
             .config.ledMask = LED_CHANNEL(REMOTE_CHARGE_LED),
             .config.state = LED_LIGHT,
             .config.runNum = 0,                     // 次数为0次数无限大，一直执行
@@ -81,11 +81,11 @@ void user_led_init(void)
         [LED_EVENT_PAIRING] = {
             // 配对LED常亮。
             .event = LED_EVENT_PAIRING,
-            .priority = PRIORITY_3,
+            .priority = PRIORITY_2,
             .config.ledMask = LED_CHANNEL(HOST_CHARGE_LED),
             .config.state = LED_BLINKING,
-            .config.blinkParams.onTime = 500,
-            .config.blinkParams.offTime = 500,
+            .config.blinkParams.onTime = 100,
+            .config.blinkParams.offTime = 100,
             .config.runNum = 5,                     // 次数为0次数无限大，一直执行
             .ledEventHandler = led_pairing_handler, // 事件处理回调函数
         },

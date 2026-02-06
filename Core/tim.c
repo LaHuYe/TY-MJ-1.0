@@ -9,7 +9,7 @@
 // 定时器计数0
 #define TIM14_PERIOD (100 - 1)
 // 定时器预分频
-#define TIM14_PRESCALER (24 - 1)
+#define TIM14_PRESCALER (12 - 1)
 
 
 

@@ -4,7 +4,8 @@
 
 static bool g_hall_long_press_flag = false;   // 霍尔长按标志位（在释放时清除）
 static bool g_remote_addr_ready_flag = false; // 已接收到遥控器地址标志位（发送完成后清除）
-static uint8_t g_remote_addr_cache[2] = {0};  // 缓存的遥控器地址
+static bool g_remote_addr_sending_flag = false; // 发送标志位
+static uint8_t g_remote_addr_cache[4] = {0};  // 缓存的遥控器地址
 
 /****************************应用层*********************************/
 
@@ -19,6 +20,12 @@ void key_hall_sensor_longPress(void)
     Log("key_hall_sensor_longPress\r\n");
     g_hall_long_press_flag = true;
     LED_EventAdd(LED_EVENT_HOST_CHARGING);
+    // 如果未收到遥控器地址，则直接开启主机充电
+    if (!g_remote_addr_ready_flag)
+    {
+        HAL_GPIO_WritePin(HOST_TX_GPIO_PORT, HOST_TX_PIN, GPIO_PIN_SET);
+    }
+    
 }
 
 /**
@@ -30,6 +37,7 @@ void key_hall_sensor_releasePress(void)
 {
     Log("key_hall_sensor_releasePress\r\n");
     g_hall_long_press_flag = false; // 释放时清除霍尔长按标志
+    g_remote_addr_sending_flag = false;
     LED_EventDelete(LED_EVENT_HOST_CHARGING);
 }
 
@@ -46,13 +54,15 @@ void key_remote_rx_longPress(void)
 
 /**
  * @brief 遥控器接收释放事件
- * @param none
+ * @param none·
  * @return none
  */
 void key_remote_rx_releasePress(void)
 {
     Log("key_remote_rx_releasePress\r\n");
     LED_EventDelete(LED_EVENT_REMOTE_CHARGING);
+    g_remote_addr_ready_flag = false;
+    g_remote_addr_sending_flag = false;
 }
 
 /****************** KEY 应用事件结束*********************/
@@ -90,22 +100,13 @@ uint8_t led_pairing_handler(LED_Config_t *led_config)
 void get_remote_address_code(void)
 {
 
-    if (LED_IsEventExist(LED_EVENT_REMOTE_CHARGING) && g_remote_addr_ready_flag)
-    {
-        LED_EventAdd(LED_EVENT_PAIRING);
-    }
-
     if (addr_rx_get_received_address(g_remote_addr_cache))
     {
-        Log("remote_address_code:0x%02X%02X\r\n", g_remote_addr_cache[0], g_remote_addr_cache[1]);
+        Log("remote_address_code:0x%02X%02X%02X%02X\r\n", g_remote_addr_cache[0], g_remote_addr_cache[1], g_remote_addr_cache[2], g_remote_addr_cache[3]);
         LED_EventAdd(LED_EVENT_REMOTE_CHARGING);
-        
+
         // 设置标志，等待霍尔长按后发送
         g_remote_addr_ready_flag = true;
-    }
-    else
-    {
-        Log("remote_address_code:NULL\r\n");
     }
 }
 
@@ -114,12 +115,13 @@ void get_remote_address_code(void)
  */
 static void try_send_remote_addr_if_ready(void)
 {
-    if (g_hall_long_press_flag && g_remote_addr_ready_flag)
+    if (g_hall_long_press_flag && g_remote_addr_ready_flag && !g_remote_addr_sending_flag)
     {
-        if (addr_tx_enable(g_remote_addr_cache))
+        if (addr_tx_enable(g_remote_addr_cache, sizeof(g_remote_addr_cache)))
         {
             // 发送触发成功后，清除接收标志；霍尔标志由释放事件清除
-            g_remote_addr_ready_flag = false;
+            LED_EventAdd(LED_EVENT_PAIRING);
+            g_remote_addr_sending_flag = true;
             Log("Remote addr sent trigger ok\r\n");
         }
         else
@@ -140,13 +142,13 @@ void version_printf(void)
 
 void app_Init(void)
 {
-    All_Tim_Init();  // 定时器初始化
-    user_key_Init(); // 按键初始化
-    user_led_init(); // LED初始化
-    addr_tx_init();  // 地址发送初始化
-    iwdg_Init();     // 看门狗初始化
-    // DEBUG_USART_Config(); // 将串口配置成日志口
-    version_printf(); // 版本打印
+    All_Tim_Init();       // 定时器初始化
+    user_key_Init();      // 按键初始化
+    user_led_init();      // LED初始化
+    addr_tx_init();       // 地址发送初始化
+    iwdg_Init();          // 看门狗初始化
+    DEBUG_USART_Config(); // 将串口配置成日志口
+    version_printf();     // 版本打印
 }
 
 void app_lication(void)

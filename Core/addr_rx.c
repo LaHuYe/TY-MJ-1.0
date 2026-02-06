@@ -14,14 +14,14 @@
 #include <stdbool.h>
 
 // 定时周期（与EV1527一致）
-#define TIME_CYCLE 100 // 100us
+#define TIME_CYCLE 50 // 50us
 
 // 同步码和数据位阈值沿用 EV1527（100us 定时周期）
 // 引导码 5.6ms~16ms
 #define MIN_LEAD_CODE (5600 / TIME_CYCLE)
 #define MAX_LEAD_CODE (16000 / TIME_CYCLE)
-// 数据位宽 100us~2400us
-#define MIN_BIT_DURATION (100 / TIME_CYCLE)
+// 数据位宽 50us~2400us
+#define MIN_BIT_DURATION (50 / TIME_CYCLE)
 #define MAX_BIT_DURATION (2400 / TIME_CYCLE)
 #define BIT_HIGH_MIN     MIN_BIT_DURATION
 #define BIT_HIGH_MAX     MAX_BIT_DURATION
@@ -29,20 +29,22 @@
 #define BIT_LOW_MAX      MAX_BIT_DURATION
 
 // 地址长度：2字节（16位）
-#define ADDR_SIZE 2
+#define ADDR_SIZE 4
 
-// 定义解码状态枚举（与EV1527完全一致）
+// 定义解码状态枚举（修改后的协议：先检测高电平引导码，再检测低电平）
 typedef enum
 {
-    LEAD_CODE,    // 引导码状态
-    HIGH_BIT,     // 高位数据位状态
-    LOW_BIT,      // 低位数据位状态
-    DATA_PROCESS, // 数据处理状态
+    LEAD_CODE,        // 引导码高电平状态
+    LEAD_CODE_LOW,    // 引导码低电平状态
+    HIGH_BIT,         // 高位数据位状态
+    LOW_BIT,          // 低位数据位状态
+    DATA_PROCESS,     // 数据处理状态
 } Addr_Decode_State_t;
 
-// 全局变量（与EV1527完全一致）
+// 全局变量
 static Addr_Decode_State_t decode_state = LEAD_CODE; // 解码状态
-static uint32_t lead_code_count = 0;                 // 引导码计数
+static uint32_t lead_code_high_count = 0;            // 引导码高电平计数
+static uint32_t lead_code_low_count = 0;             // 引导码低电平计数
 static uint32_t high_bit_count = 0;                  // 高位数据位计数
 static uint32_t low_bit_count = 0;                   // 低位数据位计数
 static uint32_t high_bit_duration = 0;               // 高位数据位持续时间
@@ -56,12 +58,13 @@ static bool address_received = false;                // 地址接收完成标志
 /**
  * @brief 重置解码参数（不清空接收缓冲区）
  */
-static void reset_decode_parameters(void)
+void reset_decode_parameters(void)
 {
     bit_count = 0;
     received_data = 0x00;
     received_byte_count = 0;
-    lead_code_count = 0;
+    lead_code_high_count = 0;
+    lead_code_low_count = 0;
     high_bit_count = 0;
     low_bit_count = 0;
     high_bit_duration = 0;
@@ -102,35 +105,59 @@ static void decode_data_bit(void)
 }
 
 /**
- * @brief 地址接收解码函数（100us调用一次，与EV1527完全一致的逻辑）
+ * @brief 地址接收解码函数（100us调用一次）
+ * @note  修改后的协议：先检测高电平引导码，高电平在范围内则进入接收模式，然后检测低电平
  */
 void addr_rx_decode(void)
 {
     switch (decode_state)
     {
-    case LEAD_CODE: // 引导码（与EV1527完全一致）
-        // 判断是否低电平
-        if (HAL_GPIO_ReadPin(REMOTE_RX_GPIO_PORT, REMOTE_RX_PIN) == GPIO_PIN_RESET)
+    case LEAD_CODE: // 引导码高电平状态（修改后的协议：先检测高电平）
+        // 判断是否高电平
+        if (HAL_GPIO_ReadPin(REMOTE_RX_GPIO_PORT, REMOTE_RX_PIN) == GPIO_PIN_SET)
         {
-            lead_code_count++;
+            lead_code_high_count++;
         }
-        else // 高电平判断范围
+        else // 低电平判断范围
         {
-            // 判断引导码范围是否合法
-            if (lead_code_count >= MIN_LEAD_CODE && lead_code_count <= MAX_LEAD_CODE)
+            // 判断引导码高电平范围是否合法
+            if (lead_code_high_count >= MIN_LEAD_CODE && lead_code_high_count <= MAX_LEAD_CODE)
             {
-                lead_code_count = 0;
                 reset_decode_parameters(); // 重置解码参数
-                decode_state = HIGH_BIT;   // 进入高位数据位判断状态
+                decode_state = LEAD_CODE_LOW; // 进入引导码低电平检测状态
+                
             }
             else
             {
-                reset_decode_parameters(); // 引导码范围不合法，重置解码参数
+                // 高电平范围不合法，重置解码参数
+                reset_decode_parameters();
             }
         }
         break;
 
-    case HIGH_BIT: // 高位数据位（与EV1527完全一致）
+    case LEAD_CODE_LOW: // 引导码低电平状态（检测引导码的低电平部分）
+        // 判断是否低电平
+        if (HAL_GPIO_ReadPin(REMOTE_RX_GPIO_PORT, REMOTE_RX_PIN) == GPIO_PIN_RESET)
+        {
+            lead_code_low_count++;
+        }
+        else // 高电平判断范围
+        {
+            // 判断引导码低电平范围是否合法
+            if ( lead_code_low_count >= MIN_LEAD_CODE && lead_code_low_count <= MAX_LEAD_CODE)
+            {
+                reset_decode_parameters(); // 重置解码参数
+                decode_state = HIGH_BIT;
+            }
+            else
+            {
+                // 低电平范围不合法，重置解码参数
+                reset_decode_parameters();
+            }
+        }
+        break;
+
+    case HIGH_BIT: // 高位数据位
         // 判断是否高电平
         if (HAL_GPIO_ReadPin(REMOTE_RX_GPIO_PORT, REMOTE_RX_PIN) == GPIO_PIN_SET)
         {
@@ -139,7 +166,7 @@ void addr_rx_decode(void)
         else // 低电平判断范围
         {
             // 判断高位数据位范围是否合法
-            if (high_bit_count >= MIN_BIT_DURATION && high_bit_count <= MAX_BIT_DURATION)
+            if ( high_bit_count >= MIN_BIT_DURATION && high_bit_count <= MAX_BIT_DURATION)
             {
                 high_bit_duration = high_bit_count; // 保存计数值，用于区分0和1
                 high_bit_count = 0;
@@ -152,7 +179,7 @@ void addr_rx_decode(void)
         }
         break;
 
-    case LOW_BIT: // 低位数据位（与EV1527完全一致）
+    case LOW_BIT: // 低位数据位
         // 判断是否低电平
         if (HAL_GPIO_ReadPin(REMOTE_RX_GPIO_PORT, REMOTE_RX_PIN) == GPIO_PIN_RESET)
         {
@@ -174,15 +201,12 @@ void addr_rx_decode(void)
         }
         break;
 
-    case DATA_PROCESS:     // 数据处理（与EV1527逻辑一致，但只接收2字节）
+    case DATA_PROCESS:     // 数据处理（只接收2字节）
         decode_data_bit(); // 解码数据
         if (received_byte_count == ADDR_SIZE)
         {
             // 接收到完整的2字节地址
             address_received = true;
-            appPrintf(LOG_DEBUG, "Address received: 0x%02X%02X\r\n",
-                      received_buffer[0], received_buffer[1]);
-
             // 地址已保存在 received_buffer 中，可以通过 addr_rx_get_received_address() 获取
             // 重置解码参数，准备接收下一帧（不清空 received_buffer）
             reset_decode_parameters();
@@ -202,7 +226,7 @@ void addr_rx_decode(void)
 
 /**
  * @brief 获取接收到的地址
- * @param addr 输出参数，用于存储地址（2字节数组）
+ * @param addr 输出参数，用于存储地址（4字节数组）
  * @return true 表示地址有效，false 表示地址无效
  */
 bool addr_rx_get_received_address(uint8_t *addr)
@@ -215,8 +239,12 @@ bool addr_rx_get_received_address(uint8_t *addr)
     // 检查地址是否已接收完成
     if (address_received)
     {
+        appPrintf(LOG_DEBUG, "Address received: 0x%02X%02X%02X%02X \r\n",
+                  received_buffer[0], received_buffer[1], received_buffer[2], received_buffer[3]);
         addr[0] = received_buffer[0];
         addr[1] = received_buffer[1];
+        addr[2] = received_buffer[2];
+        addr[3] = received_buffer[3];
         address_received = false;
         return true;
     }

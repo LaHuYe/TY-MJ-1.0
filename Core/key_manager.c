@@ -34,7 +34,7 @@ static keyCategory_t keys[KEY_NUM] = {
         .fsm.keyShield = KEY_ENABLE,
         .fsm.keyDownLevel = Bit_RESET,
         .fsm.eventType = NULL_Event,
-        .fsm.keyLongTime = 500,
+        .fsm.keyLongTime = 1000,
         .fsm.keyLastTime = 3000,
         .fsm.keyReadValue = key_hall_sensor_read,
         .func.longPressCb = key_hall_sensor_longPress,
@@ -67,7 +67,7 @@ void user_key_Init(void)
 
     GPIO_InitStruct.Pin = HALL_SENSOR_PIN;
     GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    GPIO_InitStruct.Pull = GPIO_PULLUP;
     GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;   
     HAL_GPIO_Init(HALL_SENSOR_GPIO_PORT, &GPIO_InitStruct);
 

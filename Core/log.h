@@ -9,7 +9,7 @@
 #define LOG_DUMP        0x05
 
 /* GAgent 日志等级 通过该宏设置*/
-#define LOG_LOGLEVEL         LOG_NOTIC//LOG_NOTIC
+#define LOG_LOGLEVEL         LOG_DEBUG//LOG_NOTIC
 #define LOG_TIMERLEVEL       LOG_NOTIC//LOG_NOTIC
 #define LOG_MEMLEVEL         LOG_DEBUG//linux版本不打印剩余内存
 #define LOG_TRACELEVEL       LOG_NOTIC

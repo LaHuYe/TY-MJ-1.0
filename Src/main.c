@@ -62,11 +62,16 @@ int main(void)
  */
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
-    if (htim->Instance == TIM14) // 100us定时
+    if (htim->Instance == TIM14) // 50us定时
     {
         addr_rx_decode();  // 地址接收解码
-        addr_tx_process(); // 地址发送处理
+
         static uint8_t tick_count = 0;
+
+        if (tick_count % 2 == 0)
+        {
+            addr_tx_process(); // 地址发送处理
+        }
         tick_count++;
         if (tick_count >= 10)
         {

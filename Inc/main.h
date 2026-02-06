@@ -75,9 +75,9 @@ extern "C" {
 #define HOST_TX_GPIO_CLK_ENABLE() __HAL_RCC_GPIOB_CLK_ENABLE()
 
 // 遥控器接收引脚
-#define REMOTE_RX_PIN               GPIO_PIN_6
-#define REMOTE_RX_GPIO_PORT         GPIOB
-#define REMOTE_RX_GPIO_CLK_ENABLE() __HAL_RCC_GPIOB_CLK_ENABLE()
+#define REMOTE_RX_PIN               GPIO_PIN_2
+#define REMOTE_RX_GPIO_PORT         GPIOA
+#define REMOTE_RX_GPIO_CLK_ENABLE() __HAL_RCC_GPIOA_CLK_ENABLE()
 
 /*******************************/
 
