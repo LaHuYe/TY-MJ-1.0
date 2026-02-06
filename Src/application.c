@@ -11,7 +11,7 @@ static app_state_t app_state = {
     .gear = 1, // 默认档位为1
 };
 // 接收到的地址
-static uint8_t received_address[2] = {0};
+static uint8_t received_address[4] = {0};
 void app_close_all_device(void);
 /****************** 初始化层开始*******************/
 /****************** KEY 应用事件开始*****************/
@@ -360,10 +360,11 @@ void app_RF_Recv_handle()
     Log("\r\n");
 
     // 校验接收到的数据是否正确
-    if ((RxBuffer[0] == 0xAA) && (RxBuffer[5] == sum) &&
-        (received_address[0] == RxBuffer[1]) && (received_address[1] == RxBuffer[2]))
+    if ((RxBuffer[0] == 0xAA) && (RxBuffer[7] == sum) &&
+        (received_address[0] == RxBuffer[1]) && (received_address[1] == RxBuffer[2]) 
+        && (received_address[2] == RxBuffer[3]) && (received_address[3] == RxBuffer[4]))
     {
-        if (RxBuffer[3] == 0x10)
+        if (RxBuffer[5] == 0x10)
         {
             // 加速.
             app_state.gear++;
@@ -375,7 +376,7 @@ void app_RF_Recv_handle()
             bldc_set_gear((BLDC_Gear_t)app_state.gear);
             LED_EventAdd(LED_EVENT_KEY_OPERATION);
         }
-        else if (RxBuffer[3] == 0x20)
+        else if (RxBuffer[5] == 0x20)
         {
             // 减速
             app_state.gear--;
@@ -388,7 +389,7 @@ void app_RF_Recv_handle()
             LED_EventAdd(LED_EVENT_KEY_OPERATION);
         }
 
-        if (RxBuffer[4] == 0x10)
+        if (RxBuffer[6] == 0x10)
         {
             if (app_state.state != APP_STATE_MUSCLE_GUN)
             {
@@ -400,7 +401,7 @@ void app_RF_Recv_handle()
                 LED_EventAdd(LED_EVENT_KEY_OPERATION);      // 添加按键操作事件
             }
         }
-        else if (RxBuffer[4] == 0x40)
+        else if (RxBuffer[6] == 0x40)
         {
             // 暂停
             if (app_state.state == APP_STATE_MUSCLE_GUN)
@@ -411,7 +412,7 @@ void app_RF_Recv_handle()
                 app_state.startup_time = HAL_GetTick();  // 重置开机时间戳
             }
         }
-        else if (RxBuffer[4] == 0x80)
+        else if (RxBuffer[6] == 0x80)
         {
             // 关机
             if (app_state.state == APP_STATE_STARTUP)

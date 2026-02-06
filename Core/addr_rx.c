@@ -29,7 +29,7 @@
 #define BIT_LOW_MAX      MAX_BIT_DURATION
 
 // 地址长度：2字节（16位）
-#define ADDR_SIZE 2
+#define ADDR_SIZE 4
 
 // 定义解码状态枚举（修改后的协议：先检测高电平引导码，再检测低电平）
 typedef enum
@@ -226,7 +226,7 @@ void addr_rx_decode(void)
 
 /**
  * @brief 获取接收到的地址
- * @param addr 输出参数，用于存储地址（2字节数组）
+ * @param addr 输出参数，用于存储地址（4字节数组）
  * @return true 表示地址有效，false 表示地址无效
  */
 bool addr_rx_get_received_address(uint8_t *addr)
@@ -239,10 +239,12 @@ bool addr_rx_get_received_address(uint8_t *addr)
     // 检查地址是否已接收完成
     if (address_received)
     {
-        appPrintf(LOG_DEBUG, "Address received: 0x%02X%02X\r\n",
-                  received_buffer[0], received_buffer[1]);
+        appPrintf(LOG_DEBUG, "Address received: 0x%02X%02X%02X%02X \r\n",
+                  received_buffer[0], received_buffer[1], received_buffer[2], received_buffer[3]);
         addr[0] = received_buffer[0];
         addr[1] = received_buffer[1];
+        addr[2] = received_buffer[2];
+        addr[3] = received_buffer[3];
         address_received = false;
         return true;
     }

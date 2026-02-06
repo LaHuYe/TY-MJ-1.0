@@ -50,11 +50,11 @@ void RF_Init(void)
 
     if (FALSE == CMT2300A_IsExist())
     { 
-        Log("CMT2300A not found!");
+        Log("CMT2300A not found!\r\n");
     }
     else
     {
-        Log("CMT2300A ready RX");
+        Log("CMT2300A ready RX\r\n");
     }
 
     CMT2300A_GoStby();

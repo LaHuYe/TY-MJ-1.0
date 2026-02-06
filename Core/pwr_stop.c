@@ -134,8 +134,8 @@ static void pwr_wakeUp_Init(void)
     All_Tim_Init();    // 初始化定时器（TIM1, TIM3, TIM16）
     user_led_init();   // 初始化LED
     power_gpio_init(); // 初始化电源控制
-    // cmt_spi3_init();   // 433IO口初始化
-    // RF_Init();         // 433配置与寄存器初始化
+    cmt_spi3_init();   // 433IO口初始化
+    RF_Init();         // 433配置与寄存器初始化
 }
 
 static void sleep_confing(void)

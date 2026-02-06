@@ -58,7 +58,7 @@ typedef enum
 // #define ENABLE_ANTENNA_SWITCH  //开启电子开关
 
 #define RF_RX_TIMEOUT  1000 * 60 * 60 // 60min
-#define RF_PACKET_SIZE 6              /* Define the payload size here */
+#define RF_PACKET_SIZE 8              /* Define the payload size here */
 
 void RF_Init(void);
 void RF_Config(void);
