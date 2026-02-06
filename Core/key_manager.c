@@ -96,7 +96,7 @@ void user_key_Init(void)
 
     GPIO_InitStruct.Pin = POWER_INSERT_PIN;
     GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
-    GPIO_InitStruct.Pull = GPIO_PULLDOWN;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
     GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
     HAL_GPIO_Init(POWER_INSERT_GPIO_PORT, &GPIO_InitStruct);
 
@@ -113,6 +113,24 @@ void user_key_Init(void)
     HAL_NVIC_EnableIRQ(EXTI4_15_IRQn);
 
     keyParaInit(keys);
+}
+
+/**
+ * Key wakeup init function
+ * @param none
+ * @return none
+ */
+void user_key_wakeup_Init(void)
+{
+    FULL_GPIO_CLK_ENABLE();
+
+    GPIO_InitTypeDef GPIO_InitStruct = {0};
+    
+    GPIO_InitStruct.Pin = FULL_PIN;
+    GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+    GPIO_InitStruct.Pull = GPIO_PULLUP;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
+    HAL_GPIO_Init(FULL_GPIO_PORT, &GPIO_InitStruct);
 }
 
 void user_key_handle(void)

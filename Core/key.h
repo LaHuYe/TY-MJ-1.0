@@ -19,7 +19,7 @@
 #define KEY_TIMER_MS   1  // 定时器周期（毫秒）
 #define KEY_MAX_NUMBER 12 // 最大支持按键数量
 #define DEBOUNCE_TIME  30 // 消抖时间（毫秒）
-#define KEY_INTERVAL   200 // 按键间隔时间（毫秒）
+#define KEY_INTERVAL   500 // 按键间隔时间（毫秒）
 
 #define CLICK    1 // 按键单击
 #define DbLCLICK 2 // 按键双击

@@ -27,15 +27,9 @@ static void pwr_stop_Init(void)
 
     GPIO_InitStruct.Pin = POWER_INSERT_PIN;
     GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
-    GPIO_InitStruct.Pull = GPIO_PULLUP;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
     GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
     HAL_GPIO_Init(POWER_INSERT_GPIO_PORT, &GPIO_InitStruct);
-
-    GPIO_InitStruct.Pin = FULL_PIN;
-    GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-    GPIO_InitStruct.Pull = GPIO_PULLUP;
-    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
-    HAL_GPIO_Init(FULL_GPIO_PORT, &GPIO_InitStruct);
 
     /* 配置编码器A引脚为外部中断模式（边沿触发） */
     GPIO_InitStruct.Pin = ENCODER_A_PIN;
@@ -43,13 +37,6 @@ static void pwr_stop_Init(void)
     GPIO_InitStruct.Pull = GPIO_PULLUP;                 /* 上拉输入，确保空闲时为高电平 */
     GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;       /* 高速模式，提高响应速度 */
     HAL_GPIO_Init(ENCODER_A_GPIO_PORT, &GPIO_InitStruct);
-
-    /* 配置编码器B引脚为输入模式（上拉） */
-    GPIO_InitStruct.Pin = ENCODER_B_PIN;
-    GPIO_InitStruct.Mode = GPIO_MODE_INPUT;       /* 普通输入模式 */
-    GPIO_InitStruct.Pull = GPIO_PULLUP;           /* 上拉输入 */
-    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH; /* 高速模式 */
-    HAL_GPIO_Init(ENCODER_B_GPIO_PORT, &GPIO_InitStruct);
 
     /* 配置编码器A的外部中断优先级并使能中断 */
     HAL_NVIC_SetPriority(EXTI0_1_IRQn, 0, 0);
@@ -104,13 +91,14 @@ void Set_GPIO_LowPower(void)
 
 static void pwr_wakeUp_Init(void)
 {
-    adc_Init();           // ADC 初始化
-    All_Tim_Init();       // 定时器初始化
-    user_led_init();      // LED初始化
-    encoder_init();       // 编码器初始化
-    addr_tx_init();       // 地址发送初始化
+    adc_Init();             // ADC 初始化
+    All_Tim_Init();         // 定时器初始化
+    user_key_wakeup_Init(); // 按键唤醒初始化
+    user_led_init();        // LED初始化
+    encoder_init();         // 编码器初始化
+    addr_tx_init();         // 地址发送初始化
     // DEBUG_USART_Config(); // 将串口配置成日志口
-	RF_Init();
+    RF_Init();
 }
 
 static void sleep_confing(void)
