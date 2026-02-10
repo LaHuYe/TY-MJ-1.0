@@ -33,6 +33,7 @@
 #include "common.h"
 int32_t test = 0;
 uint32_t test_pwm = 0;
+float test_current = 0;
 /* ==================== 私有变量结构体定义 ==================== */
 
 /**
@@ -70,17 +71,13 @@ typedef struct
 } BLDC_Motor_SpeedControlData_t;
 
 /**
- * @brief   PWM调整计数结构体
+ * @brief   PI控制器运行时数据结构体
  */
 typedef struct
 {
-    uint16_t increase_count_high; /* 加速时大偏差计数（偏差>high_threshold）*/
-    uint16_t increase_count_mid;  /* 加速时中偏差计数（偏差>mid_threshold且<=high_threshold）*/
-    uint16_t increase_count_low;  /* 加速时小偏差计数（偏差<=mid_threshold）*/
-    uint16_t decrease_count_high; /* 减速时大偏差计数（偏差>high_threshold）*/
-    uint16_t decrease_count_mid;  /* 减速时中偏差计数（偏差>mid_threshold且<=high_threshold）*/
-    uint16_t decrease_count_low;  /* 减速时小偏差计数（偏差<=mid_threshold）*/
-} BLDC_Motor_PwmAdjustCount_t;
+    float integral;               /* 积分累积值 */
+    uint8_t decrease_count;       /* 连续减速计数（period_error < 0的连续次数） */
+} BLDC_Motor_PIData_t;
 
 /**
  * @brief   强制换相统计结构体
@@ -108,7 +105,7 @@ typedef struct
     BLDC_Motor_StateData_t state;            /* 电机状态 */
     BLDC_Motor_StartupData_t startup;        /* 开环启动数据 */
     BLDC_Motor_SpeedControlData_t speed;     /* 闭环速度控制数据 */
-    BLDC_Motor_PwmAdjustCount_t pwm_count;   /* PWM调整计数 */
+    BLDC_Motor_PIData_t pi_data;             /* PI控制器运行时数据 */
     BLDC_Motor_ForceCommData_t force_comm;   /* 强制换相统计 */
     BLDC_Motor_CurrentProtectData_t current; /* 电流保护数据 */
     uint8_t stalled_flag;                    /* 堵转标志：1=已堵转停机，0=正常 */
@@ -184,6 +181,10 @@ static void Motor_ResetAllVars(uint8_t reset_mode)
     /* ========== 复位速度控制变量 ========== */
     s_motor.speed.last_comm_period = 0;       /* 清零上一换相周期 */
     s_motor.speed.last_speed_adjust_time = 0; /* 清零上次速度调整时间 */
+
+    /* ========== 复位PI控制器积分项 ========== */
+    s_motor.pi_data.integral = 0.0f;      /* 清零PI积分累积值 */
+    s_motor.pi_data.decrease_count = 0;   /* 清零连续减速计数 */
 
     if (reset_mode == 0 || reset_mode == 2) /* 完全复位或初始化复位 */
     {
@@ -435,12 +436,17 @@ static void Motor_RunningHandle(void)
     uint32_t now = BLDC_COMP_GetSampleCount();
 
     /* ========== 检查累计强制换相次数（堵转停机保护）========== */
-    if (s_motor.force_comm.forced_comm_total >= s_motorConfig.protection.force_total_limit)
+    /* 只在中高档时启用堵转停机保护 */
+    BLDC_SpeedRange_t speed_range = BLDC_Motor_GetSpeedRange(s_motor.speed.current_gear);
+    if (speed_range != BLDC_SPEED_RANGE_LOW)
     {
-        /* 累计强制换相次数过多，判定长期堵转，停机保护 */
-        BLDC_Motor_Stop();
-        s_motor.stalled_flag = 1; /* 设置堵转标志 */
-        return;
+        if (s_motor.force_comm.forced_comm_total >= s_motorConfig.protection.force_total_limit)
+        {
+            /* 累计强制换相次数过多，判定长期堵转，停机保护 */
+            BLDC_Motor_Stop();
+            s_motor.stalled_flag = 1; /* 设置堵转标志 */
+            return;
+        }
     }
 
     /* ========== 正常过零换相 ========== */
@@ -463,30 +469,49 @@ static void Motor_RunningHandle(void)
     else
     {
         /* ========== 换相超时强制换相 ========== */
-        /* 计算超时阈值：使用上次实际换相周期 */
-        uint32_t timeout_samples = s_motor.speed.last_comm_period * s_motorConfig.protection.comm_timeout_factor;
-
+        /* 根据档位动态选择超时系数 */
+        BLDC_SpeedRange_t speed_range = BLDC_Motor_GetSpeedRange(s_motor.speed.current_gear);
+        uint8_t timeout_factor;
+        if (speed_range == BLDC_SPEED_RANGE_LOW)
+        {
+            timeout_factor = 2; /* 低档：超时系数2倍，更宽松 */
+        }
+        else
+        {
+            timeout_factor = 10; /* 中高档：超时系数10倍，更严格 */
+        }
+        
+        /* 计算超时阈值：使用上次实际换相周期 × 超时系数 */
+        uint32_t timeout_samples = s_motor.speed.last_comm_period * timeout_factor;
+        if (timeout_samples > 1000)
+        {
+            timeout_samples = 1000;
+        }
+        
         /* 检查是否超时 */
         if ((now - s_motor.speed.last_comm_sample_time) >= timeout_samples)
         {
             /* 超时，执行强制换相 */
             s_motor.force_comm.forced_comm_total++; /* 累计强制换相计数 */
             Motor_Commutate();
+            /* 只在中高档时启用失锁重启保护 */
+            if (speed_range != BLDC_SPEED_RANGE_LOW)
+            {
+                /* 连续强制换相次数过多，判定闭环失锁，切回开环重新启动 */
+                s_motor.state.state = BLDC_MOTOR_STARTUP;
+                s_motor.state.startup_comm_count = 0;
+                s_motor.startup.startup_begin_time = HAL_GetTick(); /* 重新记录启动时间 */
+                s_motor.force_comm.zero_cross_count = 0;            /* 清零过零计数 */
 
-            /* 连续强制换相次数过多，判定闭环失锁，切回开环重新启动 */
-            s_motor.state.state = BLDC_MOTOR_STARTUP;
-            s_motor.state.startup_comm_count = 0;
-            s_motor.startup.startup_begin_time = HAL_GetTick(); /* 重新记录启动时间 */
-            s_motor.force_comm.zero_cross_count = 0;            /* 清零过零计数 */
+                /* 重新初始化开环过零点换相参数（回到起始值）*/
+                s_motor.startup.current_startup_pwm = s_motorConfig.openloop.startup_pwm_ccr;
 
-            /* 重新初始化开环过零点换相参数（回到起始值）*/
-            s_motor.startup.current_startup_pwm = s_motorConfig.openloop.startup_pwm_ccr;
+                /* 复位PWM到启动CCR值 */
+                s_motor.speed.running_pwm_ccr = s_motorConfig.openloop.startup_pwm_ccr;
 
-            /* 复位PWM到启动CCR值 */
-            s_motor.speed.running_pwm_ccr = s_motorConfig.openloop.startup_pwm_ccr;
-
-            /* 复位过零点检测状态 */
-            BLDC_COMP_ResetZeroCross();
+                /* 复位过零点检测状态 */
+                BLDC_COMP_ResetZeroCross();
+            }
 
             return;
         }
@@ -524,30 +549,44 @@ uint32_t BLDC_COMP_GetTargetPeriod(uint16_t target_speed)
 }
 
 /**
- * @brief   闭环速度控制函数（基于换相周期的直接控制 + 移动平均滤波优化）
+ * @brief   闭环速度控制函数（PI控制器版本）
  * @param   无
  * @return  无
- * @note    根据实际换相周期与目标周期的差值，自动调整PWM的CCR值。
- *          策略概览：
- *          - 调整周期：s_motorConfig.speed_ctrl.speed_adjust_period ms（默认1ms，对应20个采样点）
- *          - 容差：±3个采样点内不调整（PERIOD_TOLERANCE）
- *          - 加速：
- *              >10采样点：计数5次后执行一次快速增加（PWM_INCREASE_STEP_FAST）
- *              >5 采样点：计数50次后执行一次正常增加（PWM_INCREASE_STEP_NORMAL）
- *              ≤5采样点：立即精细增加（PWM_INCREASE_STEP_SLOW）
- *          - 减速：
- *              >10采样点：立即快速减少（PWM_DECREASE_STEP_FAST）
- *              >5 采样点：立即正常减少（PWM_DECREASE_STEP_NORMAL）
- *              ≤5采样点：计数50次后执行一次精细减少（PWM_DECREASE_STEP_SLOW）
- *          - 处于限流状态时，仅做小幅降PWM并跳过速度调节
+ * @note    使用PI控制器进行速度闭环控制，根据实际换相周期与目标周期的差值，
+ *          自动调整PWM的CCR值。
+ *          
+ *          PI控制原理：
+ *          - 偏差(error) = 目标周期 - 实际周期
+ *          - 比例项(P) = Kp × error
+ *          - 积分项(I) = Ki × Σerror （带限幅，防止积分饱和）
+ *          - 输出(output) = P + I （带限幅）
+ *          - PWM调整量 = output
+ *          
+ *          特性：
+ *          - 调整周期：s_motorConfig.speed_ctrl.speed_adjust_period ms
+ *          - 容差：在误差容差范围内不调整，减少抖动
+ *          - 限流保护：处于限流状态时降PWM并清除积分
+ *          - 不同转速区间使用不同的PI参数（低/中/高速）
  */
 static void Motor_SpeedControl(void)
 {
     uint32_t current_sample_time = BLDC_COMP_GetSampleCount();
 
-    /* 计算调整间隔：s_motorConfig.speed_ctrl.speed_adjust_period(ms) × 20(采样点/ms) = 采样点数 */
+    /* 根据档位动态选择调整周期 */
+    BLDC_SpeedRange_t speed_range = BLDC_Motor_GetSpeedRange(s_motor.speed.current_gear);
+    uint8_t adjust_period_ms;
+    if (speed_range == BLDC_SPEED_RANGE_LOW)
+    {
+        adjust_period_ms = 20; /* 低档：20ms调整周期，响应较慢但稳定 */
+    }
+    else
+    {
+        adjust_period_ms = 5; /* 中高档：5ms调整周期，响应较快 */
+    }
+
+    /* 计算调整间隔：adjust_period_ms(ms) × 20(采样点/ms) = 采样点数 */
     /* 注：50us采样周期，1ms=20个采样点，确保调整频率适中 */
-    uint32_t adjust_interval = s_motorConfig.speed_ctrl.speed_adjust_period * 20;
+    uint32_t adjust_interval = adjust_period_ms * 20;
 
     /* 速度调整周期控制（避免频繁调整）*/
     if ((current_sample_time - s_motor.speed.last_speed_adjust_time) < adjust_interval)
@@ -568,7 +607,7 @@ static void Motor_SpeedControl(void)
         return; /* 周期无效，不调整（防止除零错误和异常值） */
     }
 
-    /* 计算目标期望换相周期（40,000/目标转速） */
+    /* 计算目标期望换相周期（speed_factor/目标转速） */
     uint32_t target_period = BLDC_COMP_GetTargetPeriod(s_motor.speed.target_speed);
     if (target_period == 0)
     {
@@ -577,17 +616,22 @@ static void Motor_SpeedControl(void)
 
     /* 计算周期偏差（实际周期 - 目标周期） */
     /* 注意：周期越大表示转速越低，周期越小表示转速越高 */
+    /* error > 0: 实际周期大于目标，实际转速低于目标，需要增加PWM */
+    /* error < 0: 实际周期小于目标，实际转速高于目标，需要减少PWM */
     int32_t period_error = (int32_t)s_motor.speed.last_comm_period - (int32_t)target_period;
-
-    /* 若处于限流状态，优先降PWM并跳过速度调节，待电流恢复后再进入正常调节 */
+    test = period_error; /* 调试用全局变量 */
+    /* 若处于限流状态，优先降PWM并清除积分，待电流恢复后再进入正常调节 */
     if (s_motor.current.current_limit_active == 1)
     {
         if (s_motor.speed.running_pwm_ccr > s_motorConfig.pwm_limit.pwm_min_ccr)
         {
-            uint16_t dec = 3; /* 限流降幅：每周期减1个CCR计数，平滑降低占空比 */
+            uint16_t dec = 3; /* 限流降幅：每周期减3个CCR计数，平滑降低占空比 */
             s_motor.speed.running_pwm_ccr = (s_motor.speed.running_pwm_ccr > dec) ? (s_motor.speed.running_pwm_ccr - dec) : s_motorConfig.pwm_limit.pwm_min_ccr;
             Motor_SetPhase(s_motor.state.current_step); /* 立即应用降幅 */
         }
+        /* 清除积分累积和减速计数，防止限流结束后积分饱和 */
+        s_motor.pi_data.integral = 0.0f;
+        s_motor.pi_data.decrease_count = 0;
         return;
     }
 
@@ -597,168 +641,98 @@ static void Motor_SpeedControl(void)
         return; /* 没有配置，直接返回 */
     }
 
-    /* 根据档位选择转速区间配置 */
-    BLDC_SpeedRange_t speed_range = BLDC_Motor_GetSpeedRange(s_motor.speed.current_gear);
+    /* 检查转速区间有效性 */
     if (speed_range >= 3) /* 区间枚举值范围：0-2 */
     {
         return; /* 区间无效，直接返回 */
     }
     const BLDC_SpeedProfile_t *profile = &s_motorConfig.speed_profiles[speed_range];
 
-    uint16_t tolerance = profile->tolerance;
-    const BLDC_AdjustParam_t *inc = &profile->inc;
-    const BLDC_AdjustParam_t *dec = &profile->dec;
-
-    /* 在容差范围内不调整（避免频繁抖动） */
-    if (period_error > -(int32_t)tolerance && period_error < (int32_t)tolerance)
+    /* 在容差范围内不调整（避免频繁抖动），并清除积分防止累积 */
+    if (period_error > -(int32_t)profile->tolerance && period_error < (int32_t)profile->tolerance)
     {
+        /* 在容差范围内，不调整PWM，清除积分防止持续累积导致超调 */
+        s_motor.pi_data.integral = 0.0f;
+        s_motor.pi_data.decrease_count = 0; /* 清除减速计数 */
         return;
     }
-    test = period_error;
-    /* ========== PWM调整逻辑（带计数延迟，防抖，可配置） ========== */
-    if (period_error > 0)
+
+    /* ========== 减速延迟判断（防止堵转抖动）========== */
+    if (period_error < 0)
     {
-        /* 实际周期 > 目标周期 → 转速偏低 → 增加CCR（加速） */
-        if (!s_motor.current.current_limit_active)
+        /* 转速高于目标，需要减速 */
+        s_motor.pi_data.decrease_count++;
+        if (s_motor.pi_data.decrease_count < 5)
         {
-            int32_t abs_error = period_error;
-
-            if (abs_error > inc->high_threshold)
-            {
-                /* 大偏差：计数到 high_count 后快加；high_count=0 表示立即 */
-                s_motor.pwm_count.increase_count_high++;
-                s_motor.pwm_count.increase_count_mid = 0;
-                s_motor.pwm_count.increase_count_low = 0;
-
-                if (inc->high_count == 0 || s_motor.pwm_count.increase_count_high >= inc->high_count)
-                {
-                    s_motor.pwm_count.increase_count_high = 0;
-                    if (s_motor.speed.running_pwm_ccr < s_motorConfig.pwm_limit.pwm_max_ccr)
-                    {
-                        s_motor.speed.running_pwm_ccr += inc->high_step;
-                        if (s_motor.speed.running_pwm_ccr > s_motorConfig.pwm_limit.pwm_max_ccr)
-                        {
-                            s_motor.speed.running_pwm_ccr = s_motorConfig.pwm_limit.pwm_max_ccr;
-                        }
-                        Motor_SetPhase(s_motor.state.current_step);
-                    }
-                }
-            }
-            else if (abs_error > inc->mid_threshold)
-            {
-                /* 中偏差：计数到 mid_count 后正常加 */
-                s_motor.pwm_count.increase_count_mid++;
-                s_motor.pwm_count.increase_count_high = 0;
-                s_motor.pwm_count.increase_count_low = 0;
-
-                if (inc->mid_count == 0 || s_motor.pwm_count.increase_count_mid >= inc->mid_count)
-                {
-                    s_motor.pwm_count.increase_count_mid = 0;
-                    if (s_motor.speed.running_pwm_ccr < s_motorConfig.pwm_limit.pwm_max_ccr)
-                    {
-                        s_motor.speed.running_pwm_ccr += inc->mid_step;
-                        if (s_motor.speed.running_pwm_ccr > s_motorConfig.pwm_limit.pwm_max_ccr)
-                        {
-                            s_motor.speed.running_pwm_ccr = s_motorConfig.pwm_limit.pwm_max_ccr;
-                        }
-                        Motor_SetPhase(s_motor.state.current_step);
-                    }
-                }
-            }
-            else
-            {
-                /* 小偏差：计数到 low_count 后微加 */
-                s_motor.pwm_count.increase_count_high = 0;
-                s_motor.pwm_count.increase_count_mid = 0;
-                s_motor.pwm_count.increase_count_low++;
-
-                if (inc->low_count == 0 || s_motor.pwm_count.increase_count_low >= inc->low_count)
-                {
-                    s_motor.pwm_count.increase_count_low = 0;
-                    if (s_motor.speed.running_pwm_ccr < s_motorConfig.pwm_limit.pwm_max_ccr)
-                    {
-                        s_motor.speed.running_pwm_ccr += inc->low_step;
-                        if (s_motor.speed.running_pwm_ccr > s_motorConfig.pwm_limit.pwm_max_ccr)
-                        {
-                            s_motor.speed.running_pwm_ccr = s_motorConfig.pwm_limit.pwm_max_ccr;
-                        }
-                        Motor_SetPhase(s_motor.state.current_step);
-                    }
-                }
-            }
+            /* 连续减速次数未达到5次，本次不调整，仅累积计数 */
+            return;
         }
+        /* 达到5次，继续执行PI控制 */
     }
     else
     {
-        /* 实际周期 < 目标周期 → 转速偏高 → 减少CCR（减速） */
-        int32_t abs_error = -period_error;
-
-        if (abs_error > dec->high_threshold)
-        {
-            /* 大偏差：计数到 high_count 后快减；high_count=0 表示立即 */
-            s_motor.pwm_count.decrease_count_high++;
-            s_motor.pwm_count.decrease_count_mid = 0;
-            s_motor.pwm_count.decrease_count_low = 0;
-            s_motor.pwm_count.increase_count_high = 0;
-
-            if (dec->high_count == 0 || s_motor.pwm_count.decrease_count_high >= dec->high_count)
-            {
-                s_motor.pwm_count.decrease_count_high = 0;
-                if (s_motor.speed.running_pwm_ccr > s_motorConfig.pwm_limit.pwm_min_ccr)
-                {
-                    s_motor.speed.running_pwm_ccr -= dec->high_step;
-                    if (s_motor.speed.running_pwm_ccr < s_motorConfig.pwm_limit.pwm_min_ccr)
-                    {
-                        s_motor.speed.running_pwm_ccr = s_motorConfig.pwm_limit.pwm_min_ccr;
-                    }
-                    Motor_SetPhase(s_motor.state.current_step);
-                }
-            }
-        }
-        else if (abs_error > dec->mid_threshold)
-        {
-            /* 中偏差：计数到 mid_count 后正常减 */
-            s_motor.pwm_count.decrease_count_low = 0;
-            s_motor.pwm_count.decrease_count_high = 0;
-            s_motor.pwm_count.increase_count_high = 0;
-
-            if (dec->mid_count == 0 || ++s_motor.pwm_count.decrease_count_mid >= dec->mid_count)
-            {
-                s_motor.pwm_count.decrease_count_mid = 0;
-                if (s_motor.speed.running_pwm_ccr > s_motorConfig.pwm_limit.pwm_min_ccr)
-                {
-                    s_motor.speed.running_pwm_ccr -= dec->mid_step;
-                    if (s_motor.speed.running_pwm_ccr < s_motorConfig.pwm_limit.pwm_min_ccr)
-                    {
-                        s_motor.speed.running_pwm_ccr = s_motorConfig.pwm_limit.pwm_min_ccr;
-                    }
-                    Motor_SetPhase(s_motor.state.current_step);
-                }
-            }
-        }
-        else
-        {
-            /* 小偏差：计数到 low_count 后微减 */
-            s_motor.pwm_count.decrease_count_mid = 0;
-            s_motor.pwm_count.decrease_count_high = 0;
-            s_motor.pwm_count.increase_count_high = 0;
-
-            s_motor.pwm_count.decrease_count_low++;
-            if (dec->low_count == 0 || s_motor.pwm_count.decrease_count_low >= dec->low_count)
-            {
-                s_motor.pwm_count.decrease_count_low = 0;
-                if (s_motor.speed.running_pwm_ccr > s_motorConfig.pwm_limit.pwm_min_ccr)
-                {
-                    s_motor.speed.running_pwm_ccr -= dec->low_step;
-                    if (s_motor.speed.running_pwm_ccr < s_motorConfig.pwm_limit.pwm_min_ccr)
-                    {
-                        s_motor.speed.running_pwm_ccr = s_motorConfig.pwm_limit.pwm_min_ccr;
-                    }
-                    Motor_SetPhase(s_motor.state.current_step);
-                }
-            }
-        }
+        /* 转速低于目标，需要加速，清除减速计数 */
+        s_motor.pi_data.decrease_count = 0;
     }
+
+    /* ========== PI控制器计算 ========== */
+    const BLDC_PI_Param_t *pi = &profile->pi;
+    
+    /* 计算比例项：P = Kp × error */
+    float p_term = pi->kp * (float)period_error;
+    
+    /* 累积积分项：integral += error */
+    s_motor.pi_data.integral += (float)period_error;
+    
+    /* 积分限幅（防止积分饱和） */
+    if (s_motor.pi_data.integral > pi->integral_limit)
+    {
+        s_motor.pi_data.integral = pi->integral_limit;
+    }
+    else if (s_motor.pi_data.integral < -pi->integral_limit)
+    {
+        s_motor.pi_data.integral = -pi->integral_limit;
+    }
+    
+    /* 计算积分项：I = Ki × integral */
+    float i_term = pi->ki * s_motor.pi_data.integral;
+    
+    /* PI输出：output = P + I */
+    float pi_output = p_term + i_term;
+    
+    /* 输出限幅（PWM调整量限制） */
+    if (pi_output > pi->output_limit)
+    {
+        pi_output = pi->output_limit;
+    }
+    else if (pi_output < -pi->output_limit)
+    {
+        pi_output = -pi->output_limit;
+    }
+    
+    /* 将PI输出转换为PWM CCR调整量（整数） */
+    int16_t pwm_adjust = (int16_t)pi_output;
+    
+    /* ========== PWM调整应用 ========== */
+    /* 计算新的PWM CCR值 */
+    int32_t new_pwm_ccr = (int32_t)s_motor.speed.running_pwm_ccr + pwm_adjust;
+    
+    /* PWM限幅（最小值/最大值） */
+    if (new_pwm_ccr > s_motorConfig.pwm_limit.pwm_max_ccr)
+    {
+        new_pwm_ccr = s_motorConfig.pwm_limit.pwm_max_ccr;
+    }
+    else if (new_pwm_ccr < s_motorConfig.pwm_limit.pwm_min_ccr)
+    {
+        new_pwm_ccr = s_motorConfig.pwm_limit.pwm_min_ccr;
+    }
+    
+    /* 更新PWM CCR值 */
+    s_motor.speed.running_pwm_ccr = (uint16_t)new_pwm_ccr;
+    test_pwm = s_motor.speed.running_pwm_ccr;
+    
+    /* 应用新的PWM值 */
+    Motor_SetPhase(s_motor.state.current_step);
 }
 
 /**
@@ -978,7 +952,7 @@ void Motor_CurrentLimitHandle(void)
 {
     /* 使用滤波后的电流，降低瞬态尖峰误触发概率 */
     float current = Motor_GetFilteredCurrent();
-
+    test_current = current;
     /* 若已停机或档位无效，直接返回 */
     if (s_motor.state.state == BLDC_MOTOR_STOP)
     {
@@ -1124,9 +1098,9 @@ uint16_t BLDC_Motor_CalcRpmFromGear(BLDC_Gear_t gear)
  * @brief   根据档位选择转速区间
  * @param   gear 档位（1-100）
  * @return  转速区间枚举值
- * @note    - 档位1-44：低速区间（500-1500 RPM）
- *          - 档位45-88：中速区间（1500-2500 RPM）
- *          - 档位89-100：高速区间（2500-2800 RPM）
+ * @note    - 档位1-22：低速区间
+ *          - 档位23-70：中速区间
+ *          - 档位71-100：高速区间
  */
 BLDC_SpeedRange_t BLDC_Motor_GetSpeedRange(BLDC_Gear_t gear)
 {
@@ -1140,17 +1114,17 @@ BLDC_SpeedRange_t BLDC_Motor_GetSpeedRange(BLDC_Gear_t gear)
     }
 
     /* 根据档位范围选择区间 */
-    if (gear <= 44)
+    if (gear <= 22)
     {
-        return BLDC_SPEED_RANGE_LOW;  /* 低速区间：1-44档 */
+        return BLDC_SPEED_RANGE_LOW;  /* 低速区间：1-22档 */
     }
-    else if (gear <= 88)
+    else if (gear <= 70)
     {
-        return BLDC_SPEED_RANGE_MID;  /* 中速区间：45-88档 */
+        return BLDC_SPEED_RANGE_MID;  /* 中速区间：23-70档 */
     }
     else
     {
-        return BLDC_SPEED_RANGE_HIGH; /* 高速区间：89-100档 */
+        return BLDC_SPEED_RANGE_HIGH; /* 高速区间：71-100档 */
     }
 }
 
@@ -1237,13 +1211,13 @@ void BLDC_Motor_SetSpeed(BLDC_Gear_t gear)
         s_motor.speed.target_speed = s_motorConfig.speed_ctrl.min_speed_rpm;
     }
 
-    /* 更换档位时清除计数器，避免上一档残留影响 */
-    s_motor.pwm_count.increase_count_high = 0;
-    s_motor.pwm_count.increase_count_mid = 0;
-    s_motor.pwm_count.increase_count_low = 0;
-    s_motor.pwm_count.decrease_count_high = 0;
-    s_motor.pwm_count.decrease_count_mid = 0;
-    s_motor.pwm_count.decrease_count_low = 0;
+    /* 更换档位时清除PI积分和减速计数，避免上一档残留影响 */
+    s_motor.pi_data.integral = 0.0f;
+    s_motor.pi_data.decrease_count = 0;
+
+    /* 根据新档位更新比较器参数（滤波器和30度延时计算方式） */
+    BLDC_SpeedRange_t speed_range = BLDC_Motor_GetSpeedRange(gear);
+    BLDC_COMP_UpdateSpeedRange((uint8_t)speed_range);
 
     /* 如果电机正在运行，立即更新PWM */
     if (s_motor.state.state == BLDC_MOTOR_RUNNING)

@@ -60,6 +60,9 @@ BLDC_ZeroCross_t s_zeroCross = {0};
 /* 全局采样计数器（用于时间计算） */
 static uint32_t s_sampleCount = 0; /* 采样次数，每次定时器中断递增1次（当前50us） */
 
+/* 当前档位范围（用于动态调整比较器参数）0=低速，1=中速，2=高速 */
+static uint8_t s_currentSpeedRange = 0; /* 默认低速 */
+
 /**
  * @brief   初始化过零检测变量（硬件已在 bldc_init.c 配好）
  * @param   无
@@ -68,15 +71,15 @@ static uint32_t s_sampleCount = 0; /* 采样次数，每次定时器中断递增
  */
 void BLDC_COMP_Init(void)
 {
-    s_currentPhase = BLDC_PHASE_U;                     /* 默认检测U相 */
-    s_zeroCross.last_level = BLDC_COMP_ReadOutput();    /* 当前比较器电平作为初值 */
-    s_zeroCross.delay_30_degree_time = 0;              /* 30°延时清零 */
-    s_zeroCross.zero_detected = 0;                     /* 过零标志清零 */
-    s_zeroCross.commutation_ready = 0;                 /* 换相准备标志清零 */
-    s_zeroCross.blank_time_end = 0;                    /* 屏蔽期清零 */
-    s_zeroCross.stable_comm_count = 0;                 /* 稳定换相计数清零 */
-    s_zeroCross.last_commutation_time = 0;             /* 上次换相时刻清零 */
-    s_sampleCount = 0;                                 /* 采样计数清零 */
+    s_currentPhase = BLDC_PHASE_U;                   /* 默认检测U相 */
+    s_zeroCross.last_level = BLDC_COMP_ReadOutput(); /* 当前比较器电平作为初值 */
+    s_zeroCross.delay_30_degree_time = 0;            /* 30°延时清零 */
+    s_zeroCross.zero_detected = 0;                   /* 过零标志清零 */
+    s_zeroCross.commutation_ready = 0;               /* 换相准备标志清零 */
+    s_zeroCross.blank_time_end = 0;                  /* 屏蔽期清零 */
+    s_zeroCross.stable_comm_count = 0;               /* 稳定换相计数清零 */
+    s_zeroCross.last_commutation_time = 0;           /* 上次换相时刻清零 */
+    s_sampleCount = 0;                               /* 采样计数清零 */
 }
 
 /**
@@ -135,7 +138,16 @@ void BLDC_COMP_SampleAndFilter(void)
         if (s_zeroCross.last_commutation_time > 0)
         {
             /* 计算30°延时时间 = 当前过零点时刻 - 上次换相时刻 */
-            uint32_t delay_30_degree_raw = ((s_sampleCount - s_zeroCross.last_commutation_time)>>2);
+            /* 根据档位动态选择右移位数：低档右移5位（除以32），中高档右移2位（除以4） */
+            uint32_t delay_30_degree_raw;
+            if (s_currentSpeedRange == 0) /* 低速区间 */
+            {
+                delay_30_degree_raw = ((s_sampleCount - s_zeroCross.last_commutation_time) >> 5); /* 低档：右移5位 */
+            }
+            else /* 中速或高速区间 */
+            {
+                delay_30_degree_raw = ((s_sampleCount - s_zeroCross.last_commutation_time) >> 2); /* 中高档：右移2位 */
+            }
 
             /* 限制原始值最小值，防止极端值进入滤波器 */
             // if (delay_30_degree_raw > 100)
@@ -161,7 +173,8 @@ void BLDC_COMP_SampleAndFilter(void)
                 /* 一阶滤波：平滑过渡，抑制转速波动和噪声干扰 */
                 s_zeroCross.delay_30_degree_time =
                     (s_zeroCross.delay_30_degree_time * (256 - DELAY_FILTER_ALPHA) +
-                     delay_30_degree_raw * DELAY_FILTER_ALPHA) >> 8;
+                     delay_30_degree_raw * DELAY_FILTER_ALPHA) >>
+                    8;
             }
 
             /* ========== 触发换相标志 ========== */
@@ -315,4 +328,45 @@ void BLDC_COMP_UpdateCommutationTime(uint32_t commutation_time)
             s_zeroCross.stable_comm_count++;
         }
     }
+}
+
+/**
+ * @brief   更新比较器参数（根据档位动态调整）
+ * @param   speed_range 当前速度区间（0=低速，1=中速，2=高速）
+ * @return  无
+ * @note    根据档位动态调整比较器数字滤波器和30度延时计算方式
+ *          - 低档（1-25）：滤波器50000，延时右移5位（除以32）
+ *          - 中高档（26-100）：滤波器12000，延时右移2位（除以4）
+ */
+void BLDC_COMP_UpdateSpeedRange(uint8_t speed_range)
+{
+    /* 检查是否需要更新参数 */
+    if (s_currentSpeedRange == speed_range)
+    {
+        return; /* 相同区间，无需更新 */
+    }
+
+    /* 更新当前档位范围 */
+    s_currentSpeedRange = speed_range;
+
+    /* 停止比较器 */
+    HAL_COMP_Stop(&hcomp);
+
+    /* 根据档位范围调整数字滤波器 */
+    if (speed_range == 0) /* 低速区间 */
+    {
+        /* 低档：滤波器设为50000 */
+        hcomp.Init.DigitalFilter = 50000;
+    }
+    else /* 中速或高速区间 */
+    {
+        /* 中高档：滤波器设为12000 */
+        hcomp.Init.DigitalFilter = 12000;
+    }
+
+    /* 重新初始化比较器 */
+    HAL_COMP_Init(&hcomp);
+
+    /* 启动比较器 */
+    HAL_COMP_Start(&hcomp);
 }

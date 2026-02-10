@@ -16,95 +16,59 @@
 /* ==================== 私有变量 ==================== */
 static BLDC_Gear_t s_currentGear = BLDC_GEAR_OFF; /* 当前档位 */
 
-/* ==================== 转速区间速度环配置（100档位分段配置）==================== */
+/* ==================== 转速区间速度环配置（100档位分段配置 - PI控制版本）==================== */
 /**
- * @brief   转速区间配置表
- * @note    将100个档位分成3个转速区间，每个区间使用相同的控制参数：
- *          - 低速区间（1-44档）：500-1500 RPM
- *          - 中速区间（45-88档）：1500-2500 RPM
- *          - 高速区间（89-100档）：2500-2800 RPM
+ * @brief   转速区间配置表（PI控制器版本）
+ * @note    将100个档位分成3个转速区间，每个区间使用不同的PI参数：
+ *          - 低速区间（1-22档）
+ *          - 中速区间（23-70档）
+ *          - 高速区间（71-100档）
  *          
  *          转速计算公式：RPM = 500 + (gear - 1) * 23
+ *          
+ *          PI参数调整指南：
+ *          - Kp（比例系数）：响应速度，值越大响应越快，但过大会超调振荡
+ *          - Ki（积分系数）：消除稳态误差，值越大收敛越快，但过大会积分饱和
+ *          - integral_limit：积分限幅，防止积分饱和导致PWM突变
+ *          - output_limit：输出限幅，限制单次PWM调整量，避免突变
  */
 static const BLDC_SpeedProfile_t s_speedRangeProfiles[3] = {
-    /* 低速区间：500-1500 RPM (档位1-44) */
+    /* 低速区间：档位1-22 */
     [BLDC_SPEED_RANGE_LOW] = {
         .target_rpm = 0,    /* 动态计算，此处不使用 */
-        .tolerance = 2,     /* 速度误差容差（采样点） */
-        .oc_limit_a = 3.0f, /* 过流阈值（安培） */
-        .inc = {
-            .high_threshold = 20, /* 大偏差阈值（采样点） */
-            .mid_threshold = 5,   /* 中偏差阈值（采样点） */
-            .high_step = 50,      /* 大偏差时的调整步长（CCR） */
-            .mid_step = 10,        /* 中偏差时的调整步长（CCR） */
-            .low_step = 1,        /* 小偏差时的调整步长（CCR） */
-            .high_count = 0,      /* 大调整立即执行 */
-            .mid_count = 1,       /* 中调整计数到1 */
-            .low_count = 5        /* 小调整计数到5 */
-        },
-        .dec = {
-            .high_threshold = 20, /* 大偏差阈值（采样点） */
-            .mid_threshold = 5,   /* 中偏差阈值（采样点） */
-            .high_step = 50,      /* 大偏差时的调整步长（CCR） */
-            .mid_step = 20,       /* 中偏差时的调整步长（CCR） */
-            .low_step = 1,        /* 小偏差时的调整步长（CCR） */
-            .high_count = 0,      /* 大调整立即执行 */
-            .mid_count = 0,       /* 中调整立即执行 */
-            .low_count = 7        /* 小调整计数到7 */
+        .tolerance = 3,     /* 速度误差容差（采样点）- 增加容差减少抖动 */
+        .oc_limit_a = 5.0f, /* 过流阈值（安培） */
+        .pi = {
+            .kp = 0.3f,            /* 比例系数：降低响应速度，减少振荡 */
+            .ki = 0.1f,           /* 积分系数：降低积分作用 */
+            .integral_limit = 150.0f, /* 积分限幅：防止积分饱和 */
+            .output_limit = 30.0f     /* 输出限幅：降低单次调整量 */
         }
     },
 
-    /* 中速区间：1500-2500 RPM (档位45-88) */
+    /* 中速区间：档位23-70 */
     [BLDC_SPEED_RANGE_MID] = {
         .target_rpm = 0,    /* 动态计算，此处不使用 */
-        .tolerance = 2,     /* 速度误差容差（采样点） */
-        .oc_limit_a = 4.0f, /* 过流阈值（安培） */
-        .inc = {
-            .high_threshold = 8,  /* 大偏差阈值（采样点） */
-            .mid_threshold = 5,   /* 中偏差阈值（采样点） */
-            .high_step = 40,      /* 大偏差时的调整步长（CCR） */
-            .mid_step = 10,       /* 中偏差时的调整步长（CCR） */
-            .low_step = 1,        /* 小偏差时的调整步长（CCR） */
-            .high_count = 0,      /* 大调整立即执行 */
-            .mid_count = 1,       /* 中调整计数到1 */
-            .low_count = 5        /* 小调整计数到5 */
-        },
-        .dec = {
-            .high_threshold = 8,  /* 大偏差阈值（采样点） */
-            .mid_threshold = 5,   /* 中偏差阈值（采样点） */
-            .high_step = 20,      /* 大偏差时的调整步长（CCR） */
-            .mid_step = 10,       /* 中偏差时的调整步长（CCR） */
-            .low_step = 1,        /* 小偏差时的调整步长（CCR） */
-            .high_count = 0,      /* 大调整立即执行 */
-            .mid_count = 1,       /* 中调整计数到1 */
-            .low_count = 3        /* 小调整计数到3 */
+        .tolerance = 3,     /* 速度误差容差（采样点）- 增加容差减少抖动 */
+        .oc_limit_a = 5.0f, /* 过流阈值（安培） */
+        .pi = {
+            .kp = 0.1f,            /* 比例系数：降低响应速度 */
+            .ki = 0.1f,            /* 积分系数：降低积分作用 */
+            .integral_limit = 120.0f, /* 积分限幅：防止积分饱和 */
+            .output_limit = 35.0f     /* 输出限幅：降低单次调整量 */
         }
     },
 
-    /* 高速区间：2500-2800 RPM (档位89-100) */
+    /* 高速区间：档位71-100 */
     [BLDC_SPEED_RANGE_HIGH] = {
         .target_rpm = 0,    /* 动态计算，此处不使用 */
-        .tolerance = 1,     /* 速度误差容差（采样点） */
+        .tolerance = 2,     /* 速度误差容差（采样点）- 增加容差 */
         .oc_limit_a = 5.0f, /* 过流阈值（安培） */
-        .inc = {
-            .high_threshold = 6,  /* 大偏差阈值（采样点） */
-            .mid_threshold = 4,   /* 中偏差阈值（采样点） */
-            .high_step = 3,       /* 大偏差时的调整步长（CCR） */
-            .mid_step = 3,        /* 中偏差时的调整步长（CCR） */
-            .low_step = 1,        /* 小偏差时的调整步长（CCR） */
-            .high_count = 1,      /* 大调整计数到1 */
-            .mid_count = 2,       /* 中调整计数到2 */
-            .low_count = 5        /* 小调整计数到5 */
-        },
-        .dec = {
-            .high_threshold = 10, /* 大偏差阈值（采样点） */
-            .mid_threshold = 6,   /* 中偏差阈值（采样点） */
-            .high_step = 50,      /* 大偏差时的调整步长（CCR） */
-            .mid_step = 50,       /* 中偏差时的调整步长（CCR） */
-            .low_step = 1,        /* 小偏差时的调整步长（CCR） */
-            .high_count = 0,      /* 大调整立即执行 */
-            .mid_count = 1,       /* 中调整计数到1 */
-            .low_count = 1        /* 小调整计数到1 */
+        .pi = {
+            .kp = 0.1f,            /* 比例系数：高速区间更温和 */
+            .ki = 0.1f,            /* 积分系数：减小积分作用，防止高速振荡 */
+            .integral_limit = 80.0f,  /* 积分限幅：高速区间限制更严 */
+            .output_limit = 20.0f     /* 输出限幅：高速区间调整更平滑 */
         }
     }
 };
@@ -160,16 +124,16 @@ void bldc_app_init(void)
             .pwm_max_ccr = 1080 /* 最大PWM CCR=1080 (90%) */
         },
         .protection = {
-            .comm_timeout_factor = 8, /* 超时系数：目标周期的4倍 */
+            .comm_timeout_factor = 2, /* 超时系数：目标周期的4倍 */
             .force_total_limit = 30   /* 累计强制换相上限→停机 */
         },
         .current = {
             .oc_trip_duration_ms = 200, /* 过流判定时间：持续超过阈值200ms即停机 */
-            .shunt_res_ohm = 0.05f,     /* 采样电阻=0.05Ω */
+            .shunt_res_ohm = 0.025f,     /* 采样电阻=0.05Ω */
             .sense_gain = 1.0f          /* 电流放大倍数（无放大=1.0）*/
         },
         .speed_ctrl = {
-            .speed_adjust_period = 2, /* 调整周期=2ms（给电机足够的响应时间）*/
+            .speed_adjust_period = 20, /* 调整周期=5ms（降低调整频率，减少振荡）*/
             .min_speed_rpm = 500,     /* 最低转速：500 RPM */
             .max_speed_rpm = 2800     /* 最高转速：2800 RPM（档位100：500+99*23=2777） */
         },

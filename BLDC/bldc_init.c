@@ -252,7 +252,7 @@ static void BLDC_COMP_CoreInit(void)
     hcomp.Init.Hysteresis = COMP_WINDOWMODE_DISABLE;
     hcomp.Init.WindowMode = COMP_WINDOWMODE_DISABLE;
     hcomp.Init.TriggerMode = COMP_TRIGGERMODE_NONE; /* 不使用比较器中断 */
-    hcomp.Init.DigitalFilter = 12000;                /* 过零点滤波值，需按波形调整 */
+    hcomp.Init.DigitalFilter = 50000;                /* 过零点滤波值，需按波形调整 */
 
     if (HAL_COMP_Init(&hcomp) != HAL_OK)
     {

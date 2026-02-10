@@ -9,15 +9,7 @@
 #define __BLDC_COMP_H__
 
 #include "main.h"
-
-/* ==================== 相位枚举定义 ==================== */
-/* 相位命名：U=A相, V=B相, W=C相 */
-typedef enum
-{
-    BLDC_PHASE_U = 0, /* U相（对应A相）*/
-    BLDC_PHASE_V = 1, /* V相（对应B相）*/
-    BLDC_PHASE_W = 2  /* W相（对应C相）*/
-} BLDC_Phase_t;
+#include "bldc_init.h"
 
 /* 过零点检测相关变量 */
 typedef struct
@@ -108,5 +100,15 @@ uint32_t BLDC_COMP_GetSampleCount(void);
  *          换相时刻到过零点的时间间隔 = 30°电角度
  */
 void BLDC_COMP_UpdateCommutationTime(uint32_t commutation_time);
+
+/**
+ * @brief   更新比较器参数（根据档位动态调整）
+ * @param   speed_range 当前速度区间（0=低速，1=中速，2=高速）
+ * @return  无
+ * @note    根据档位动态调整比较器数字滤波器和30度延时计算方式
+ *          - 低档（1-25）：滤波器50000，延时右移5位
+ *          - 中高档（26-100）：滤波器12000，延时右移2位
+ */
+void BLDC_COMP_UpdateSpeedRange(uint8_t speed_range);
 
 #endif /* __BLDC_COMP_H__ */

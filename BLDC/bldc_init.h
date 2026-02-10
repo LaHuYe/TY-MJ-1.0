@@ -10,8 +10,15 @@
 #ifndef __BLDC_INIT_H__
 #define __BLDC_INIT_H__
 
-#include "bldc_comp.h"
 #include "main.h"
+
+/* 前向声明，避免循环包含 */
+typedef enum
+{
+    BLDC_PHASE_U = 0, /* U相（对应A相）*/
+    BLDC_PHASE_V = 1, /* V相（对应B相）*/
+    BLDC_PHASE_W = 2  /* W相（对应C相）*/
+} BLDC_Phase_t;
 /* ==================== 硬件架构说明 ==================== */
 /**
  * @brief   BLDC驱动电路架构
@@ -198,5 +205,8 @@ void BLDC_COMP_SetInputPlus(BLDC_Phase_t phase);
  * @return  1=高电平，0=低电平
  */
 uint8_t BLDC_COMP_ReadOutput(void);
+
+/* 比较器句柄外部声明 */
+extern COMP_HandleTypeDef hcomp;
 
 #endif /* __BLDC_INIT_H__ */

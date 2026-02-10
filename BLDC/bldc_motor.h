@@ -72,41 +72,41 @@ typedef struct
     uint16_t pwm_max_ccr;      /* 开环阶段PWM最大CCR值 */
 } BLDC_Motor_OpenLoopConfig_t;
 
-/* ==================== 速度环可配置参数 ==================== */
+/* ==================== PI控制器参数 ==================== */
+/**
+ * @brief   PI控制器参数结构体
+ * @note    用于速度闭环控制，控制PWM占空比
+ */
 typedef struct
 {
-    uint16_t high_threshold; /* 大偏差阈值（采样点） */
-    uint16_t mid_threshold;  /* 中偏差阈值（采样点） */
-    uint16_t high_step;      /* 大偏差时的调整步长（CCR） */
-    uint16_t mid_step;       /* 中偏差时的调整步长（CCR） */
-    uint16_t low_step;       /* 小/微偏差时的调整步长（CCR） */
-    uint8_t high_count;      /* 大偏差累计计数（0表示不计数，立即调整） */
-    uint8_t mid_count;       /* 中偏差累计计数 */
-    uint8_t low_count;       /* 小偏差累计计数 */
-} BLDC_AdjustParam_t;
+    float kp;             /* 比例系数 */
+    float ki;             /* 积分系数 */
+    float integral_limit; /* 积分限幅（防止积分饱和） */
+    float output_limit;   /* 输出限幅（PWM调整量限制，CCR单位） */
+} BLDC_PI_Param_t;
 
+/* ==================== 速度环可配置参数（PI控制版本） ==================== */
 typedef struct
 {
-    uint16_t target_rpm;    /* 目标转速（RPM） */
-    uint16_t tolerance;     /* 速度误差容差（采样点） */
-    float oc_limit_a;       /* 过流阈值（安培），0表示使用默认限值 */
-    BLDC_AdjustParam_t inc; /* 加速调整参数 */
-    BLDC_AdjustParam_t dec; /* 减速调整参数 */
+    uint16_t target_rpm;  /* 目标转速（RPM） */
+    uint16_t tolerance;   /* 速度误差容差（采样点），在此范围内不调整 */
+    float oc_limit_a;     /* 过流阈值（安培），0表示使用默认限值 */
+    BLDC_PI_Param_t pi;   /* PI控制器参数 */
 } BLDC_SpeedProfile_t;
 
 /* ==================== 转速区间定义（用于100档位分段配置）==================== */
 /**
  * @brief   转速区间枚举
  * @note    将100个档位分成3个转速区间，每个区间使用相同的控制参数
- *          - 低速区间：500-1500 RPM (档位1-44)
- *          - 中速区间：1500-2500 RPM (档位45-88)
- *          - 高速区间：2500-2800 RPM (档位89-100)
+ *          - 低速区间：档位1-22
+ *          - 中速区间：档位23-70
+ *          - 高速区间：档位71-100
  */
 typedef enum
 {
-    BLDC_SPEED_RANGE_LOW = 0,  /* 低速区间：500-1500 RPM (档位1-44) */
-    BLDC_SPEED_RANGE_MID = 1,  /* 中速区间：1500-2500 RPM (档位45-88) */
-    BLDC_SPEED_RANGE_HIGH = 2  /* 高速区间：2500-2800 RPM (档位89-100) */
+    BLDC_SPEED_RANGE_LOW = 0,  /* 低速区间：档位1-22 */
+    BLDC_SPEED_RANGE_MID = 1,  /* 中速区间：档位23-70 */
+    BLDC_SPEED_RANGE_HIGH = 2  /* 高速区间：档位71-100 */
 } BLDC_SpeedRange_t;
 
 /* ==================== PWM限制配置结构体 ==================== */
@@ -315,9 +315,9 @@ uint16_t BLDC_Motor_CalcRpmFromGear(BLDC_Gear_t gear);
  * @brief   根据档位选择转速区间
  * @param   gear 档位（1-100）
  * @return  转速区间枚举值
- * @note    - 档位1-44：低速区间
- *          - 档位45-88：中速区间
- *          - 档位89-100：高速区间
+ * @note    - 档位1-22：低速区间
+ *          - 档位23-70：中速区间
+ *          - 档位71-100：高速区间
  */
 BLDC_SpeedRange_t BLDC_Motor_GetSpeedRange(BLDC_Gear_t gear);
 

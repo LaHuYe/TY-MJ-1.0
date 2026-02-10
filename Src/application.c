@@ -68,7 +68,7 @@ void key_power_longPress(void)
         return;
     }
 
-    app_state.gear = 1;                               // 不管开关机档位都设置为1档
+    app_state.gear = 0;                               // 不管开关机档位都设置为1档
     app_state.startup_flag = !app_state.startup_flag; // 开关机标志位
 
     if (app_state.startup_flag)
@@ -589,7 +589,9 @@ void app_Init(void)
     bat_init(); // 初始化电池
     RF_Init();
 }
-
+extern int32_t test_pwm;
+extern int32_t test;
+extern float test_current;
 void app_lication(void)
 {
     while (1)
@@ -600,5 +602,6 @@ void app_lication(void)
         app_machine_handle(); // 状态机处理函数
         addr_rx_handle();     // 地址接收处理函数
         app_RF_Recv_handle(); // RF接收处理函数
+        // Log("test:%d,test_pwm:%d,test_current:%f\r\n", test, test_pwm, test_current);
     }
 }
