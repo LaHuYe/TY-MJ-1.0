@@ -361,32 +361,37 @@ void app_RF_Recv_handle()
 
     // 校验接收到的数据是否正确
     if ((RxBuffer[0] == 0xAA) && (RxBuffer[7] == sum) &&
-        (received_address[0] == RxBuffer[1]) && (received_address[1] == RxBuffer[2]) 
-        && (received_address[2] == RxBuffer[3]) && (received_address[3] == RxBuffer[4]))
+        (received_address[0] == RxBuffer[1]) && (received_address[1] == RxBuffer[2]) && (received_address[2] == RxBuffer[3]) && (received_address[3] == RxBuffer[4]))
     {
         if (RxBuffer[5] == 0x10)
         {
-            // 加速.
-            app_state.gear++;
-            // 档位最大为BLDC_GEAR_100
-            if (app_state.gear >= BLDC_GEAR_MAX)
+            if (app_state.state == APP_STATE_MUSCLE_GUN)
             {
-                app_state.gear = BLDC_GEAR_100;
+                // 加速.
+                app_state.gear++;
+                // 档位最大为BLDC_GEAR_100
+                if (app_state.gear >= BLDC_GEAR_MAX)
+                {
+                    app_state.gear = BLDC_GEAR_100;
+                }
+                bldc_set_gear((BLDC_Gear_t)app_state.gear);
+                LED_EventAdd(LED_EVENT_KEY_OPERATION);
             }
-            bldc_set_gear((BLDC_Gear_t)app_state.gear);
-            LED_EventAdd(LED_EVENT_KEY_OPERATION);
         }
         else if (RxBuffer[5] == 0x20)
         {
-            // 减速
-            app_state.gear--;
-            // 档位最大为BLDC_GEAR_100
-            if (app_state.gear <= BLDC_GEAR_1)
+            if (app_state.state == APP_STATE_MUSCLE_GUN)
             {
-                app_state.gear = BLDC_GEAR_1;
+                // 减速
+                app_state.gear--;
+                // 档位最大为BLDC_GEAR_100
+                if (app_state.gear <= BLDC_GEAR_1)
+                {
+                    app_state.gear = BLDC_GEAR_1;
+                }
+                bldc_set_gear((BLDC_Gear_t)app_state.gear);
+                LED_EventAdd(LED_EVENT_KEY_OPERATION);
             }
-            bldc_set_gear((BLDC_Gear_t)app_state.gear);
-            LED_EventAdd(LED_EVENT_KEY_OPERATION);
         }
 
         if (RxBuffer[6] == 0x10)
@@ -397,6 +402,7 @@ void app_RF_Recv_handle()
                 set_bldc_power_enable(true);                // 设置BLDC供电使能
                 bldc_app_init();                            // 初始化BLDC电机
                 app_state.state = APP_STATE_MUSCLE_GUN;     // 进入筋膜枪状
+                app_state.gear++;                           // 档位加1
                 bldc_set_gear((BLDC_Gear_t)app_state.gear); // 设置BLDC档位
                 LED_EventAdd(LED_EVENT_KEY_OPERATION);      // 添加按键操作事件
             }
