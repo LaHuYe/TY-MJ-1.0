@@ -61,9 +61,6 @@ BLDC_ZeroCross_t s_zeroCross = {0};
 /* 全局采样计数器（用于时间计算） */
 static uint32_t s_sampleCount = 0; /* 采样次数，每次定时器中断递增1次（当前50us） */
 
-/* 当前档位范围（用于动态调整比较器参数）0=低速，1=中速，2=高速 */
-static uint8_t s_currentSpeedRange = 0; /* 默认低速 */
-
 /**
  * @brief   初始化过零检测变量（硬件已在 bldc_init.c 配好）
  * @param   无
@@ -77,7 +74,6 @@ void BLDC_COMP_Init(void)
     s_zeroCross.delay_30_degree_time = 0;              /* 30°延时清零 */
     s_zeroCross.zero_detected = 0;                     /* 过零标志清零 */
     s_zeroCross.commutation_ready = 0;                 /* 换相准备标志清零 */
-    s_zeroCross.stable_comm_count = 0;                 /* 稳定换相计数清零 */
     s_zeroCross.last_commutation_time = 0;             /* 上次换相时刻清零 */
     s_zeroCross.filter_level = s_zeroCross.last_level; /* 候选电平初始化为当前电平 */
     s_zeroCross.filter_count = 0;                      /* 连续计数清零 */
@@ -123,18 +119,27 @@ void BLDC_COMP_SampleAndFilter(void)
     /* ========== 动态滤波阈值：转速越高阈值越小 ========== */
     /* 阈值 = 换相周期 / 8，范围限制在 [2, 15]
      * 转速低/开环时阈值大（保守，抗干扰强）；转速高时阈值小（响应快，不漏过零点） */
-    uint8_t filter_threshold;
+        uint8_t filter_threshold;
     {
-        uint32_t comm_period = BLDC_Motor_GetLastCommPeriod();
-        if (comm_period == 0)
+        if (BLDC_Motor_GetState() != BLDC_MOTOR_RUNNING)
         {
-            filter_threshold = 20; /* 无换相数据（开环期间）使用最大值 */
+            /* 开环/停止阶段：使用最大滤波值，防止噪声触发误过零 */
+            filter_threshold = 40;
         }
         else
         {
-            filter_threshold = (uint8_t)(comm_period >> 2)+(comm_period >> 4); /* 除以8 */
-            if (filter_threshold < 4)  { filter_threshold = 4;  } /* 最小2，防止完全不滤波 */
-            if (filter_threshold > 15) { filter_threshold = 15; } /* 最大15 */
+            /* 闭环阶段：根据换相周期动态计算，转速越高滤波值越小 */
+            uint32_t comm_period = BLDC_Motor_GetLastCommPeriod();
+            if (comm_period == 0)
+            {
+                filter_threshold = 20;
+            }
+            else
+            {
+                filter_threshold = (uint8_t)(comm_period >> 2) + (comm_period >> 4);
+                if (filter_threshold < 4)  { filter_threshold = 4;  } /* 最小4 */
+                if (filter_threshold > 15) { filter_threshold = 15; } /* 最大15 */
+            }
         }
     }
 
@@ -170,17 +175,8 @@ void BLDC_COMP_SampleAndFilter(void)
     /* 原理：从换相点到过零点的时间间隔 = 30°电角度 */
     if (s_zeroCross.last_commutation_time > 0)
     {
-        /* 计算30°延时时间 = 当前过零点时刻 - 上次换相时刻 */
-        /* 根据档位动态选择右移位数：低档右移5位（除以32），中高档右移2位（除以4） */
-        uint32_t delay_30_degree_raw;
-        if (s_currentSpeedRange == 0) /* 低速区间 */
-        {
-            delay_30_degree_raw = ((s_sampleCount - s_zeroCross.last_commutation_time)>>3); /* 低档：右移5位 */
-        }
-        else /* 中速或高速区间 */
-        {
-            delay_30_degree_raw = ((s_sampleCount - s_zeroCross.last_commutation_time)>>3); /* 中高档：右移2位 */
-        }
+        /* 计算30°延时时间 = 当前过零点时刻 - 上次换相时刻，右移3位（除以8）*/
+        uint32_t delay_30_degree_raw = ((s_sampleCount - s_zeroCross.last_commutation_time) >> 3);
 
         /* 限制原始值最小值，防止极端值进入滤波器 */
         // if (delay_30_degree_raw > 100)
@@ -322,7 +318,6 @@ void BLDC_COMP_ResetZeroCross(void)
     s_zeroCross.commutation_ready = 0;
     s_zeroCross.delay_30_degree_time = 0;
     s_zeroCross.last_commutation_time = 0;
-    s_zeroCross.stable_comm_count = 0;                 /* 复位闭环稳定计数器 */
     s_zeroCross.filter_level = BLDC_COMP_ReadOutput(); /* 候选电平重置为当前电平 */
     s_zeroCross.filter_count = 0;                      /* 连续计数清零 */
 }
@@ -353,54 +348,5 @@ void BLDC_COMP_UpdateCommutationTime(uint32_t commutation_time)
     /* 换相后重置滤波状态，让过零检测从当前电平重新开始计数，避免旧候选值污染 */
     s_zeroCross.filter_level = BLDC_COMP_ReadOutput();
     s_zeroCross.filter_count = 0;
-
-    /* 闭环运行阶段：递增稳定换相计数（用于滤波深度切换）*/
-    if (BLDC_Motor_GetState() == BLDC_MOTOR_RUNNING)
-    {
-        if (s_zeroCross.stable_comm_count < 255) /* 防止溢出（uint8_t） */
-        {
-            s_zeroCross.stable_comm_count++;
-        }
-    }
 }
 
-/**
- * @brief   更新比较器参数（根据档位动态调整）
- * @param   speed_range 当前速度区间（0=低速，1=中速，2=高速）
- * @return  无
- * @note    根据档位动态调整比较器数字滤波器和30度延时计算方式
- *          - 低档（1-25）：滤波器50000，延时右移5位（除以32）
- *          - 中高档（26-100）：滤波器12000，延时右移2位（除以4）
- */
-void BLDC_COMP_UpdateSpeedRange(uint8_t speed_range)
-{
-    /* 检查是否需要更新参数 */
-    if (s_currentSpeedRange == speed_range)
-    {
-        return; /* 相同区间，无需更新 */
-    }
-
-    /* 更新当前档位范围 */
-    s_currentSpeedRange = speed_range;
-
-    /* 停止比较器 */
-    HAL_COMP_Stop(&hcomp);
-
-    /* 根据档位范围调整数字滤波器 */
-    if (speed_range == 0) /* 低速区间 */
-    {
-        /* 低档：滤波器设为50000 */
-        hcomp.Init.DigitalFilter = 0;
-    }
-    else /* 中速或高速区间 */
-    {
-        /* 中高档：滤波器设为12000 */
-        hcomp.Init.DigitalFilter = 0;
-    }
-
-    /* 重新初始化比较器 */
-    HAL_COMP_Init(&hcomp);
-
-    /* 启动比较器 */
-    HAL_COMP_Start(&hcomp);
-}

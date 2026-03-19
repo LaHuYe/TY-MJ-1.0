@@ -130,7 +130,6 @@ BLDC_Motor_Config_t s_motorConfig = {
     },
     .openloop = {
         .comm_delay = 100,      /* 100×50us=5ms起始换相间隔（慢启动，可靠）*/
-        .openloop_time_ms = 90, /* 开环运行500ms后强制进入闭环 */
         .startup_pwm_ccr = 300, /* 启动阶段起始PWM CCR=120（约10%占空比，逐渐增加）*/
         .pwm_step_ccr = 2,      /* 每次换相增加PWM CCR=2（精细控制）*/
         .pwm_max_ccr = 500      /* 开环阶段PWM最大CCR=500（约42%占空比）*/
@@ -493,20 +492,6 @@ static void Motor_RunningHandle(void)
 {
     uint32_t now = BLDC_COMP_GetSampleCount();
 
-    /* ========== 检查累计强制换相次数（堵转停机保护）========== */
-    /* 只在中高档时启用堵转停机保护 */
-    // BLDC_SpeedRange_t speed_range = BLDC_Motor_GetSpeedRange(s_motor.speed.current_gear);
-    // if (speed_range != BLDC_SPEED_RANGE_LOW)
-    // {
-    //     if (s_motor.force_comm.forced_comm_total >= s_motorConfig.protection.force_total_limit)
-    //     {
-    //         /* 累计强制换相次数过多，判定长期堵转，停机保护 */
-    //         BLDC_Motor_Stop();
-    //         s_motor.stalled_flag = 1; /* 设置堵转标志 */
-    //         return;
-    //     }
-    // }
-
     /* ========== 正常过零换相 ========== */
     if (BLDC_COMP_IsCommutationReady())
     {
@@ -527,17 +512,7 @@ static void Motor_RunningHandle(void)
     else
     {
         /* ========== 换相超时强制换相 ========== */
-        /* 根据档位动态选择超时系数 */
-        BLDC_SpeedRange_t speed_range = BLDC_Motor_GetSpeedRange(s_motor.speed.current_gear);
-        uint8_t timeout_factor;
-        // if (speed_range == BLDC_SPEED_RANGE_LOW)
-        // {
-        //     timeout_factor = 4; /* 低档：超时系数2倍，更宽松 */
-        // }
-        // else
-        // {
-        timeout_factor = 10; /* 中高档：超时系数10倍，更严格 */
-        // }
+        uint8_t timeout_factor = 10; /* 超时系数：上次换相周期×10 */
 
         /* 计算超时阈值：使用上次实际换相周期 × 超时系数 */
         uint32_t timeout_samples = s_motor.speed.last_comm_period * timeout_factor;
@@ -552,10 +527,7 @@ static void Motor_RunningHandle(void)
             /* 超时，执行强制换相 */
             s_motor.force_comm.forced_comm_total++; /* 累计强制换相计数 */
             Motor_Commutate();
-            // /* 只在中高档时启用失锁重启保护 */
-            // if (speed_range != BLDC_SPEED_RANGE_LOW)
-            // {
-            /* 连续强制换相次数过多，判定闭环失锁，切回开环重新启动 */
+            /* 闭环失锁，切回开环重新启动 */
             s_motor.state.state = BLDC_MOTOR_STARTUP;
             s_motor.state.startup_comm_count = 0;
             s_motor.startup.startup_begin_time = HAL_GetTick(); /* 重新记录启动时间 */
@@ -569,7 +541,6 @@ static void Motor_RunningHandle(void)
 
             /* 复位过零点检测状态 */
             BLDC_COMP_ResetZeroCross();
-            // }
 
             return;
         }
@@ -630,17 +601,8 @@ static void Motor_SpeedControl(void)
 {
     uint32_t current_sample_time = BLDC_COMP_GetSampleCount();
 
-    /* 根据档位动态选择调整周期 */
-    BLDC_SpeedRange_t speed_range = BLDC_Motor_GetSpeedRange(s_motor.speed.current_gear);
-    uint8_t adjust_period_ms;
-    if (speed_range == BLDC_SPEED_RANGE_LOW && s_motor.force_comm.forced_comm_total > 0)
-    {
-        adjust_period_ms = 1; /* 低档：30ms调整周期，响应较慢但稳定 */
-    }
-    else
-    {
-        adjust_period_ms = 1; /* 中高档：5ms调整周期，响应较快 */
-    }
+    /* 调整周期：1ms */
+    const uint8_t adjust_period_ms = 1;
 
     /* 计算调整间隔：adjust_period_ms(ms) × 20(采样点/ms) = 采样点数 */
     /* 注：50us采样周期，1ms=20个采样点，确保调整频率适中 */
@@ -696,18 +658,13 @@ static void Motor_SpeedControl(void)
         return;
     }
 
-    /* 读取当前档位配置，若未注册则直接返回 */
+    /* 读取档位配置，若未注册则直接返回 */
     if (s_motorConfig.speed_profiles == NULL)
     {
-        return; /* 没有配置，直接返回 */
+        return;
     }
 
-    // /* 检查转速区间有效性 */
-    // if (speed_range >= 3) /* 区间枚举值范围：0-2 */
-    // {
-    //     return; /* 区间无效，直接返回 */
-    // }
-    const BLDC_SpeedProfile_t *profile = &s_motorConfig.speed_profiles[speed_range];
+    const BLDC_SpeedProfile_t *profile = &s_motorConfig.speed_profiles[0];
 
     /* 在容差范围内不调整（避免频繁抖动），并清除积分防止累积 */
     if (period_error > -(int32_t)profile->tolerance && period_error < (int32_t)profile->tolerance)
@@ -729,7 +686,7 @@ static void Motor_SpeedControl(void)
     }
     else
     {
-        delay_threshold = 10; /* 正常运行：需连续10次才调节，防止偶发抖动 */
+        delay_threshold = 20; /* 正常运行：需连续10次才调节，防止偶发抖动 */
     }
 
     if (period_error < 0)
@@ -792,21 +749,6 @@ static void Motor_SpeedControl(void)
 
     /* 将PI输出转换为PWM CCR调整量（整数） */
     int16_t pwm_adjust = (int16_t)pi_output;
-
-    /* ========== 低档堵转保护：PWM 只允许增加 ========== */
-    /* 低档下 forced_comm_total > 0 表示正在发生强制换相（疑似堵转），
-     * 此时禁止 PI 降低 PWM，只允许增加，防止进一步失速；
-     * 待 forced_comm_total 自然衰减至 0 后恢复正常 PI 调节。 */
-    // if (speed_range == BLDC_SPEED_RANGE_LOW && s_motor.force_comm.forced_comm_total > 0)
-    // {
-    //     if (pwm_adjust <= 0)
-    //     {
-    //         /* 清除积分和减速计数，避免恢复时因积分累积导致超调 */
-    //         s_motor.pi_data.integral   = 0.0f;
-    //         s_motor.pi_data.decrease_count = 0;
-    //         return;
-    //     }
-    // }
 
     /* ========== PWM调整应用 ========== */
     /* 计算新的PWM CCR值 */
@@ -1056,28 +998,12 @@ void Motor_CurrentLimitHandle(void)
         return;
     }
 
-    /* 选择当前档位对应转速区间的过流阈值 */
-    float oc_limit = 0.0f;
-    if (s_motorConfig.speed_profiles != NULL)
+    /* 读取过流阈值 */
+    if (s_motorConfig.speed_profiles == NULL)
     {
-        /* 根据档位选择转速区间配置 */
-        BLDC_SpeedRange_t speed_range = BLDC_Motor_GetSpeedRange(s_motor.speed.current_gear);
-        if (speed_range < 3) /* 区间枚举值范围：0-2 */
-        {
-            const BLDC_SpeedProfile_t *profile = &s_motorConfig.speed_profiles[speed_range];
-            oc_limit = profile->oc_limit_a;
-        }
-        else
-        {
-            /* 区间无效，直接返回（不进行过流保护）*/
-            return;
-        }
-    }
-    else
-    {
-        /* 没有配置，直接返回（不进行过流保护）*/
         return;
     }
+    float oc_limit = s_motorConfig.speed_profiles[0].oc_limit_a;
 
     /* 检查是否持续超阈值 */
     if (current >= oc_limit)
@@ -1190,46 +1116,6 @@ uint16_t BLDC_Motor_CalcRpmFromGear(BLDC_Gear_t gear)
 }
 
 /**
- * @brief   根据档位选择转速区间
- * @param   gear 档位（1-100）
- * @return  转速区间枚举值
- * @note    - 档位1-22：低速区间
- *          - 档位23-70：中速区间
- *          - 档位71-100：高速区间
- */
-BLDC_SpeedRange_t BLDC_Motor_GetSpeedRange(BLDC_Gear_t gear)
-{
-    if (gear == BLDC_GEAR_OFF || gear == 0)
-    {
-        return BLDC_SPEED_RANGE_LOW; /* 默认返回低速区间 */
-    }
-    if (gear >= BLDC_GEAR_MAX)
-    {
-        gear = BLDC_GEAR_100; /* 限制最大档位 */
-    }
-
-    /* 根据档位范围选择区间 */
-    if (gear <= 50)
-    {
-        return BLDC_SPEED_RANGE_LOW; /* 低速区间：1-22档 */
-    }
-    else if (gear <= 70)
-    {
-        return BLDC_SPEED_RANGE_MID; /* 中速区间：23-70档 */
-    }
-    else
-    {
-        return BLDC_SPEED_RANGE_HIGH; /* 高速区间：71-100档 */
-    }
-}
-
-/**
- * @brief   设置启动配置参数
- * @param   config 启动配置结构体指针
- * @return  无
- */
-
-/**
  * @brief   设置电机总配置（包含正反转、启动参数、开环参数等）
  * @param   config 电机配置结构体指针
  * @return  无
@@ -1247,7 +1133,6 @@ void BLDC_Motor_SetConfig(const BLDC_Motor_Config_t *config)
         s_motorConfig.current = config->current;
         s_motorConfig.speed_ctrl = config->speed_ctrl;
         s_motorConfig.speed_profiles = config->speed_profiles;
-        s_motorConfig.speed_profile_count = config->speed_profile_count;
         s_motorConfig.speed_factor = config->speed_factor;
     }
 }
@@ -1310,10 +1195,6 @@ void BLDC_Motor_SetSpeed(BLDC_Gear_t gear)
     s_motor.pi_data.integral = 0.0f;
     s_motor.pi_data.decrease_count = 0;
     s_motor.pi_data.increase_count = 0;
-
-    /* 根据新档位更新比较器参数（滤波器和30度延时计算方式） */
-    BLDC_SpeedRange_t speed_range = BLDC_Motor_GetSpeedRange(gear);
-    BLDC_COMP_UpdateSpeedRange((uint8_t)speed_range);
 
     /* 如果电机正在运行，立即更新PWM */
     if (s_motor.state.state == BLDC_MOTOR_RUNNING)

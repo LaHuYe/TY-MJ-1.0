@@ -18,58 +18,23 @@ static BLDC_Gear_t s_currentGear = BLDC_GEAR_OFF; /* 当前档位 */
 
 /* ==================== 转速区间速度环配置（100档位分段配置 - PI控制版本）==================== */
 /**
- * @brief   转速区间配置表（PI控制器版本）
- * @note    将100个档位分成3个转速区间，每个区间使用不同的PI参数：
- *          - 低速区间（1-22档）
- *          - 中速区间（23-70档）
- *          - 高速区间（71-100档）
- *          
- *          转速计算公式：RPM = 500 + (gear - 1) * 23
- *          
+ * @brief   速度闭环配置表（全档位统一参数，档位1-100）
+ * @note    转速计算公式：RPM = 500 + (gear - 1) × 23
  *          PI参数调整指南：
- *          - Kp（比例系数）：响应速度，值越大响应越快，但过大会超调振荡
- *          - Ki（积分系数）：消除稳态误差，值越大收敛越快，但过大会积分饱和
- *          - integral_limit：积分限幅，防止积分饱和导致PWM突变
- *          - output_limit：输出限幅，限制单次PWM调整量，避免突变
+ *          - kp：比例系数，值越大响应越快，过大会导致超调振荡
+ *          - ki：积分系数，用于消除稳态误差，过大会导致积分饱和
+ *          - integral_limit：积分限幅，防止积分饱和引起PWM突变
+ *          - output_limit：单次PWM调整量上限，防止突变
  */
-static const BLDC_SpeedProfile_t s_speedRangeProfiles[3] = {
-    /* 低速区间：档位1-22 */
-    [BLDC_SPEED_RANGE_LOW] = {
-        .target_rpm = 0,    /* 动态计算，此处不使用 */
-        .tolerance = 3,     /* 速度误差容差（采样点）- 增加容差减少抖动 */
-        .oc_limit_a = 5.0f, /* 过流阈值（安培） */
-        .pi = {
-            .kp = 0.01f,            /* 比例系数：降低响应速度，减少振荡 */
-            .ki = 0.1f,           /* 积分系数：降低积分作用 */
-            .integral_limit = 150.0f, /* 积分限幅：防止积分饱和 */
-            .output_limit = 30.0f     /* 输出限幅：降低单次调整量 */
-        }
-    },
-
-    /* 中速区间：档位23-70 */
-    [BLDC_SPEED_RANGE_MID] = {
-        .target_rpm = 0,    /* 动态计算，此处不使用 */
-        .tolerance = 3,     /* 速度误差容差（采样点）- 增加容差减少抖动 */
-        .oc_limit_a = 5.0f, /* 过流阈值（安培） */
-        .pi = {
-            .kp = 0.1f,            /* 比例系数：降低响应速度 */
-            .ki = 0.1f,            /* 积分系数：降低积分作用 */
-            .integral_limit = 150.0f, /* 积分限幅：防止积分饱和 */
-            .output_limit = 30.0f     /* 输出限幅：降低单次调整量 */
-        }
-    },
-
-    /* 高速区间：档位71-100 */
-    [BLDC_SPEED_RANGE_HIGH] = {
-        .target_rpm = 0,    /* 动态计算，此处不使用 */
-        .tolerance = 2,     /* 速度误差容差（采样点）- 增加容差 */
-        .oc_limit_a = 5.0f, /* 过流阈值（安培） */
-        .pi = {
-            .kp = 0.1f,            /* 比例系数：高速区间更温和 */
-            .ki = 0.1f,            /* 积分系数：减小积分作用，防止高速振荡 */
-            .integral_limit = 150.0f, /* 积分限幅：防止积分饱和 */
-            .output_limit = 30.0f     /* 输出限幅：降低单次调整量 */
-        }
+static const BLDC_SpeedProfile_t s_speedProfile = {
+    .target_rpm   = 0,      /* 由档位动态计算，此处不使用 */
+    .tolerance    = 1,      /* 换相周期误差容差（采样点），范围内不调整 */
+    .oc_limit_a   = 5.0f,   /* 过流保护阈值（A） */
+    .pi = {
+        .kp             = 0.01f,   /* 比例系数 */
+        .ki             = 0.1f,    /* 积分系数 */
+        .integral_limit = 150.0f,  /* 积分限幅（CCR单位） */
+        .output_limit   = 30.0f    /* 单次输出限幅（CCR单位） */
     }
 };
 
@@ -114,7 +79,6 @@ void bldc_app_init(void)
         },
         .openloop = {
             .comm_delay = 200,      /* 启动换相间隔：200×50us=10ms */
-            .openloop_time_ms = 500, /* 开环运行200ms后强制进入闭环 */
             .startup_pwm_ccr = 100, /* 启动PWM CCR=300（约25%）*/
             .pwm_step_ccr = 1,      /* 每次换相增加PWM CCR=2 */
             .pwm_max_ccr = 500,     /* 开环阶段PWM最大CCR=500 */
@@ -137,8 +101,7 @@ void bldc_app_init(void)
             .min_speed_rpm = 500,     /* 最低转速：500 RPM */
             .max_speed_rpm = 2800     /* 最高转速：2800 RPM（档位100：500+99*23=2777） */
         },
-        .speed_profiles = s_speedRangeProfiles,  /* 速度环区间配置表（3个区间） */
-        .speed_profile_count = 3,                /* 区间配置表元素个数（3个区间） */
+        .speed_profiles = &s_speedProfile,  /* 速度环配置 */
         .speed_factor = speed_factor             /* 转速转换系数（预计算） */
     };
     BLDC_Motor_SetConfig(&motor_cfg);

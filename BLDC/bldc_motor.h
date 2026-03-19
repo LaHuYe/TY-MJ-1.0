@@ -66,7 +66,6 @@ typedef struct
 typedef struct
 {
     uint32_t comm_delay;       /* 启动换相间隔（采样周期数），例如100×50us=5ms */
-    uint16_t openloop_time_ms; /* 开环运行时间（ms），超过此时间强制进入闭环 */
     uint16_t startup_pwm_ccr;  /* 启动阶段PWM CCR计数值（0-1199），更精细的控制 */
     uint16_t pwm_step_ccr;     /* 每次换相增加PWM CCR值 */
     uint16_t pwm_max_ccr;      /* 开环阶段PWM最大CCR值 */
@@ -93,21 +92,6 @@ typedef struct
     float oc_limit_a;     /* 过流阈值（安培），0表示使用默认限值 */
     BLDC_PI_Param_t pi;   /* PI控制器参数 */
 } BLDC_SpeedProfile_t;
-
-/* ==================== 转速区间定义（用于100档位分段配置）==================== */
-/**
- * @brief   转速区间枚举
- * @note    将100个档位分成3个转速区间，每个区间使用相同的控制参数
- *          - 低速区间：档位1-22
- *          - 中速区间：档位23-70
- *          - 高速区间：档位71-100
- */
-typedef enum
-{
-    BLDC_SPEED_RANGE_LOW = 0,  /* 低速区间：档位1-22 */
-    BLDC_SPEED_RANGE_MID = 1,  /* 中速区间：档位23-70 */
-    BLDC_SPEED_RANGE_HIGH = 2  /* 高速区间：档位71-100 */
-} BLDC_SpeedRange_t;
 
 /* ==================== PWM限制配置结构体 ==================== */
 /**
@@ -166,7 +150,6 @@ typedef struct
     BLDC_Motor_CurrentProtectConfig_t current;  /* 电流保护参数 */
     BLDC_Motor_SpeedControlConfig_t speed_ctrl; /* 速度控制参数 */
     const BLDC_SpeedProfile_t *speed_profiles;  /* 速度环档位配置表指针 */
-    uint8_t speed_profile_count;                /* 速度环配置表元素个数 */
     uint32_t speed_factor;                      /* 转速转换系数（在初始化时根据极对数和采样周期计算） */
 } BLDC_Motor_Config_t;
 
@@ -310,15 +293,5 @@ uint32_t BLDC_Motor_GetSpeedFactor(void);
  *          - 档位100：500 + 99*23 = 2777 RPM
  */
 uint16_t BLDC_Motor_CalcRpmFromGear(BLDC_Gear_t gear);
-
-/**
- * @brief   根据档位选择转速区间
- * @param   gear 档位（1-100）
- * @return  转速区间枚举值
- * @note    - 档位1-22：低速区间
- *          - 档位23-70：中速区间
- *          - 档位71-100：高速区间
- */
-BLDC_SpeedRange_t BLDC_Motor_GetSpeedRange(BLDC_Gear_t gear);
 
 #endif /* __BLDC_MOTOR_H__ */

@@ -20,7 +20,6 @@ typedef struct
     uint32_t zero_detect_time;       /* 过零点检测时刻 */
     uint32_t last_commutation_time;  /* 上次换相时刻（采样计数器） */
     uint8_t commutation_ready;       /* 换相准备标志：1=可以换相，0=等待中 */
-    uint8_t stable_comm_count;       /* 闭环稳定换相计数（用于滤波深度切换） */
     uint8_t filter_level;            /* 当前候选电平（连续采样中的最新值） */
     uint8_t filter_count;            /* 当前候选电平连续一致的次数 */
 } BLDC_ZeroCross_t;
@@ -101,15 +100,5 @@ uint32_t BLDC_COMP_GetSampleCount(void);
  *          换相时刻到过零点的时间间隔 = 30°电角度
  */
 void BLDC_COMP_UpdateCommutationTime(uint32_t commutation_time);
-
-/**
- * @brief   更新比较器参数（根据档位动态调整）
- * @param   speed_range 当前速度区间（0=低速，1=中速，2=高速）
- * @return  无
- * @note    根据档位动态调整比较器数字滤波器和30度延时计算方式
- *          - 低档（1-25）：滤波器50000，延时右移5位
- *          - 中高档（26-100）：滤波器12000，延时右移2位
- */
-void BLDC_COMP_UpdateSpeedRange(uint8_t speed_range);
 
 #endif /* __BLDC_COMP_H__ */

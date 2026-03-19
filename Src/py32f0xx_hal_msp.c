@@ -126,15 +126,15 @@ void HAL_COMP_MspInit(COMP_HandleTypeDef *hcomp)
         HAL_NVIC_EnableIRQ(ADC_COMP_IRQn);
 
         // 过零点输出
-        // GPIO_InitTypeDef GPIO_InitStruct={0};
-        // __HAL_RCC_GPIOA_CLK_ENABLE();
-        // GPIO_InitStruct.Pin = GPIO_PIN_12;
-        // GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
-        // GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
-        // GPIO_InitStruct.Pull = GPIO_PULLDOWN;
-        // GPIO_InitStruct.Alternate = GPIO_AF7_COMP2;
+        GPIO_InitTypeDef GPIO_InitStruct={0};
+        __HAL_RCC_GPIOA_CLK_ENABLE();
+        GPIO_InitStruct.Pin = GPIO_PIN_12;
+        GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+        GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
+        GPIO_InitStruct.Pull = GPIO_PULLDOWN;
+        GPIO_InitStruct.Alternate = GPIO_AF7_COMP2;
 
-        // HAL_GPIO_Init(GPIOA,  &GPIO_InitStruct);
+        HAL_GPIO_Init(GPIOA,  &GPIO_InitStruct);
     }
 }
 
