@@ -15,13 +15,14 @@
 typedef struct
 {
     uint8_t zero_detected;           /* 过零点检测标志：1=检测到，0=未检测到 */
-    uint8_t last_level;              /* 上次比较器输出电平 */
+    uint8_t last_level;              /* 上次已确认的比较器电平（滤波后） */
     uint32_t delay_30_degree_time;   /* 30°电角度延时时间 */
     uint32_t zero_detect_time;       /* 过零点检测时刻 */
     uint32_t last_commutation_time;  /* 上次换相时刻（采样计数器） */
-    uint32_t blank_time_end;         /* 过零检测屏蔽期结束时刻（采样计数器） */
     uint8_t commutation_ready;       /* 换相准备标志：1=可以换相，0=等待中 */
     uint8_t stable_comm_count;       /* 闭环稳定换相计数（用于滤波深度切换） */
+    uint8_t filter_level;            /* 当前候选电平（连续采样中的最新值） */
+    uint8_t filter_count;            /* 当前候选电平连续一致的次数 */
 } BLDC_ZeroCross_t;
 
 /* ==================== 函数声明 ==================== */

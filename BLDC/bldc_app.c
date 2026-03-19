@@ -39,7 +39,7 @@ static const BLDC_SpeedProfile_t s_speedRangeProfiles[3] = {
         .tolerance = 3,     /* 速度误差容差（采样点）- 增加容差减少抖动 */
         .oc_limit_a = 5.0f, /* 过流阈值（安培） */
         .pi = {
-            .kp = 0.3f,            /* 比例系数：降低响应速度，减少振荡 */
+            .kp = 0.01f,            /* 比例系数：降低响应速度，减少振荡 */
             .ki = 0.1f,           /* 积分系数：降低积分作用 */
             .integral_limit = 150.0f, /* 积分限幅：防止积分饱和 */
             .output_limit = 30.0f     /* 输出限幅：降低单次调整量 */
@@ -54,8 +54,8 @@ static const BLDC_SpeedProfile_t s_speedRangeProfiles[3] = {
         .pi = {
             .kp = 0.1f,            /* 比例系数：降低响应速度 */
             .ki = 0.1f,            /* 积分系数：降低积分作用 */
-            .integral_limit = 120.0f, /* 积分限幅：防止积分饱和 */
-            .output_limit = 35.0f     /* 输出限幅：降低单次调整量 */
+            .integral_limit = 150.0f, /* 积分限幅：防止积分饱和 */
+            .output_limit = 30.0f     /* 输出限幅：降低单次调整量 */
         }
     },
 
@@ -67,8 +67,8 @@ static const BLDC_SpeedProfile_t s_speedRangeProfiles[3] = {
         .pi = {
             .kp = 0.1f,            /* 比例系数：高速区间更温和 */
             .ki = 0.1f,            /* 积分系数：减小积分作用，防止高速振荡 */
-            .integral_limit = 80.0f,  /* 积分限幅：高速区间限制更严 */
-            .output_limit = 20.0f     /* 输出限幅：高速区间调整更平滑 */
+            .integral_limit = 150.0f, /* 积分限幅：防止积分饱和 */
+            .output_limit = 30.0f     /* 输出限幅：降低单次调整量 */
         }
     }
 };
@@ -113,14 +113,14 @@ void bldc_app_init(void)
             .align_time_samples = 100,   /* 预定位持续时间：3个采样周期 */
         },
         .openloop = {
-            .comm_delay = 110,      /* 启动换相间隔：110×50us=5.5ms */
+            .comm_delay = 200,      /* 启动换相间隔：200×50us=10ms */
             .openloop_time_ms = 500, /* 开环运行200ms后强制进入闭环 */
-            .startup_pwm_ccr = 300, /* 启动PWM CCR=300（约25%）*/
-            .pwm_step_ccr = 2,      /* 每次换相增加PWM CCR=2 */
-            .pwm_max_ccr = 400,     /* 开环阶段PWM最大CCR=500 */
+            .startup_pwm_ccr = 100, /* 启动PWM CCR=300（约25%）*/
+            .pwm_step_ccr = 1,      /* 每次换相增加PWM CCR=2 */
+            .pwm_max_ccr = 500,     /* 开环阶段PWM最大CCR=500 */
         },
         .pwm_limit = {
-            .pwm_min_ccr = 50,  /* 最小PWM CCR=50 (约4%) */
+            .pwm_min_ccr = 30,  /* 最小PWM CCR=50 (约4%) */
             .pwm_max_ccr = 1080 /* 最大PWM CCR=1080 (90%) */
         },
         .protection = {

@@ -21,6 +21,7 @@
 #include "bldc_comp.h"
 #include "bldc_init.h"
 #include "bldc_motor.h"
+uint32_t s_delay_30_degree_time = 0;
 
 /* ==================== 说明 ==================== */
 /**
@@ -71,15 +72,16 @@ static uint8_t s_currentSpeedRange = 0; /* 默认低速 */
  */
 void BLDC_COMP_Init(void)
 {
-    s_currentPhase = BLDC_PHASE_U;                   /* 默认检测U相 */
-    s_zeroCross.last_level = BLDC_COMP_ReadOutput(); /* 当前比较器电平作为初值 */
-    s_zeroCross.delay_30_degree_time = 0;            /* 30°延时清零 */
-    s_zeroCross.zero_detected = 0;                   /* 过零标志清零 */
-    s_zeroCross.commutation_ready = 0;               /* 换相准备标志清零 */
-    s_zeroCross.blank_time_end = 0;                  /* 屏蔽期清零 */
-    s_zeroCross.stable_comm_count = 0;               /* 稳定换相计数清零 */
-    s_zeroCross.last_commutation_time = 0;           /* 上次换相时刻清零 */
-    s_sampleCount = 0;                               /* 采样计数清零 */
+    s_currentPhase = BLDC_PHASE_U;                     /* 默认检测U相 */
+    s_zeroCross.last_level = BLDC_COMP_ReadOutput();   /* 当前比较器电平作为初值 */
+    s_zeroCross.delay_30_degree_time = 0;              /* 30°延时清零 */
+    s_zeroCross.zero_detected = 0;                     /* 过零标志清零 */
+    s_zeroCross.commutation_ready = 0;                 /* 换相准备标志清零 */
+    s_zeroCross.stable_comm_count = 0;                 /* 稳定换相计数清零 */
+    s_zeroCross.last_commutation_time = 0;             /* 上次换相时刻清零 */
+    s_zeroCross.filter_level = s_zeroCross.last_level; /* 候选电平初始化为当前电平 */
+    s_zeroCross.filter_count = 0;                      /* 连续计数清零 */
+    s_sampleCount = 0;                                 /* 采样计数清零 */
 }
 
 /**
@@ -118,71 +120,102 @@ void BLDC_COMP_SampleAndFilter(void)
 {
     s_sampleCount++; /* 全局采样计数器递增 */
 
-    /* ========== 过零检测屏蔽期检查 ========== */
-    /* 换相后的屏蔽期内，不进行过零检测，避免换相干扰导致误检测 */
-    if (s_sampleCount < s_zeroCross.blank_time_end)
+    /* ========== 动态滤波阈值：转速越高阈值越小 ========== */
+    /* 阈值 = 换相周期 / 8，范围限制在 [2, 15]
+     * 转速低/开环时阈值大（保守，抗干扰强）；转速高时阈值小（响应快，不漏过零点） */
+    uint8_t filter_threshold;
     {
-        return; /* 屏蔽期内，直接返回 */
+        uint32_t comm_period = BLDC_Motor_GetLastCommPeriod();
+        if (comm_period == 0)
+        {
+            filter_threshold = 20; /* 无换相数据（开环期间）使用最大值 */
+        }
+        else
+        {
+            filter_threshold = (uint8_t)(comm_period >> 2)+(comm_period >> 4); /* 除以8 */
+            if (filter_threshold < 4)  { filter_threshold = 4;  } /* 最小2，防止完全不滤波 */
+            if (filter_threshold > 15) { filter_threshold = 15; } /* 最大15 */
+        }
     }
 
-    /* 读取当前比较器输出 */
+    /* ========== 连续一致滤波：防止毛刺误触发 ========== */
+    /* 每次采样读取一次比较器，连续 filter_threshold 次读到相同值且与上次确认电平不同，才判定为有效边沿 */
     uint8_t current_level = BLDC_COMP_ReadOutput();
 
-    /* 检测边沿变化（上升沿或下降沿） */
-    if (current_level != s_zeroCross.last_level)
+    if (current_level == s_zeroCross.filter_level)
     {
-        s_zeroCross.last_level = current_level;
-
-        /* ========== 方法1：使用"过零点时刻 - 换相时刻"计算30°（推荐）========== */
-        /* 原理：从换相点到过零点的时间间隔 = 30°电角度 */
-        if (s_zeroCross.last_commutation_time > 0)
+        /* 与候选电平一致，累加计数 */
+        if (s_zeroCross.filter_count < filter_threshold)
         {
-            /* 计算30°延时时间 = 当前过零点时刻 - 上次换相时刻 */
-            /* 根据档位动态选择右移位数：低档右移5位（除以32），中高档右移2位（除以4） */
-            uint32_t delay_30_degree_raw;
-            if (s_currentSpeedRange == 0) /* 低速区间 */
-            {
-                delay_30_degree_raw = ((s_sampleCount - s_zeroCross.last_commutation_time) >> 5); /* 低档：右移5位 */
-            }
-            else /* 中速或高速区间 */
-            {
-                delay_30_degree_raw = ((s_sampleCount - s_zeroCross.last_commutation_time) >> 2); /* 中高档：右移2位 */
-            }
-
-            /* 限制原始值最小值，防止极端值进入滤波器 */
-            // if (delay_30_degree_raw > 100)
-            // {
-            //     delay_30_degree_raw = 100; /* 最小值=100×50us=2.5ms */
-            // }
-            if (delay_30_degree_raw < 3)
-            {
-                delay_30_degree_raw = 3; /* 最小值=3×50us=0.15ms */
-            }
-
-            /* ========== 一阶低通滤波（平滑延时时间，提高稳定性）========== */
-            /* 滤波公式：filtered = α * new + (1-α) * old */
-            /* 使用定点数运算：α = DELAY_FILTER_ALPHA / 256 */
-
-            if (s_zeroCross.delay_30_degree_time == 0)
-            {
-                /* 首次计算，直接使用原始值（避免除0或无效滤波）*/
-                s_zeroCross.delay_30_degree_time = 800;
-            }
-            else
-            {
-                /* 一阶滤波：平滑过渡，抑制转速波动和噪声干扰 */
-                s_zeroCross.delay_30_degree_time =
-                    (s_zeroCross.delay_30_degree_time * (256 - DELAY_FILTER_ALPHA) +
-                     delay_30_degree_raw * DELAY_FILTER_ALPHA) >>
-                    8;
-            }
-
-            /* ========== 触发换相标志 ========== */
-            /* 只有计算出30°延时后，才触发换相流程 */
-            s_zeroCross.zero_detect_time = s_sampleCount; /* 记录过零点时刻（用于30°延时计算） */
-            s_zeroCross.zero_detected = 1;                /* 设置过零点检测标志 */
-            s_zeroCross.commutation_ready = 0;            /* 等待30°延时 */
+            s_zeroCross.filter_count++;
         }
+    }
+    else
+    {
+        /* 候选电平变化，重新开始计数 */
+        s_zeroCross.filter_level = current_level;
+        s_zeroCross.filter_count = 1;
+    }
+
+    /* 连续计数达到阈值且与上次确认电平不同 → 判定为有效边沿 */
+    if (s_zeroCross.filter_count < filter_threshold || s_zeroCross.filter_level == s_zeroCross.last_level)
+    {
+        return; /* 未达到滤波阈值或电平未变化，继续等待 */
+    }
+
+    /* 确认边沿，更新已确认电平 */
+    s_zeroCross.last_level = s_zeroCross.filter_level;
+
+    /* ========== 方法1：使用"过零点时刻 - 换相时刻"计算30°（推荐）========== */
+    /* 原理：从换相点到过零点的时间间隔 = 30°电角度 */
+    if (s_zeroCross.last_commutation_time > 0)
+    {
+        /* 计算30°延时时间 = 当前过零点时刻 - 上次换相时刻 */
+        /* 根据档位动态选择右移位数：低档右移5位（除以32），中高档右移2位（除以4） */
+        uint32_t delay_30_degree_raw;
+        if (s_currentSpeedRange == 0) /* 低速区间 */
+        {
+            delay_30_degree_raw = ((s_sampleCount - s_zeroCross.last_commutation_time)>>3); /* 低档：右移5位 */
+        }
+        else /* 中速或高速区间 */
+        {
+            delay_30_degree_raw = ((s_sampleCount - s_zeroCross.last_commutation_time)>>3); /* 中高档：右移2位 */
+        }
+
+        /* 限制原始值最小值，防止极端值进入滤波器 */
+        // if (delay_30_degree_raw > 100)
+        // {
+        //     delay_30_degree_raw = 100; /* 最小值=100×50us=2.5ms */
+        // }
+        if (delay_30_degree_raw < 1)
+        {
+            delay_30_degree_raw = 1; /* 最小值=3×50us=0.15ms */
+        }
+
+        /* ========== 一阶低通滤波（平滑延时时间，提高稳定性）========== */
+        /* 滤波公式：filtered = α * new + (1-α) * old */
+        /* 使用定点数运算：α = DELAY_FILTER_ALPHA / 256 */
+
+        if (s_zeroCross.delay_30_degree_time == 0)
+        {
+            /* 首次计算，直接使用原始值（避免除0或无效滤波）*/
+            s_zeroCross.delay_30_degree_time = 500;
+        }
+        else
+        {
+            /* 一阶滤波：平滑过渡，抑制转速波动和噪声干扰 */
+            s_zeroCross.delay_30_degree_time =
+                (s_zeroCross.delay_30_degree_time * (256 - DELAY_FILTER_ALPHA) +
+                 delay_30_degree_raw * DELAY_FILTER_ALPHA) >>
+                8;
+            s_delay_30_degree_time = s_zeroCross.delay_30_degree_time;
+        }
+
+        /* ========== 触发换相标志 ========== */
+        /* 只有计算出30°延时后，才触发换相流程 */
+        s_zeroCross.zero_detect_time = s_sampleCount; /* 记录过零点时刻（用于30°延时计算） */
+        s_zeroCross.zero_detected = 1;                /* 设置过零点检测标志 */
+        s_zeroCross.commutation_ready = 0;            /* 等待30°延时 */
     }
 }
 
@@ -289,8 +322,9 @@ void BLDC_COMP_ResetZeroCross(void)
     s_zeroCross.commutation_ready = 0;
     s_zeroCross.delay_30_degree_time = 0;
     s_zeroCross.last_commutation_time = 0;
-    s_zeroCross.blank_time_end = 0;    /* 复位屏蔽期 */
-    s_zeroCross.stable_comm_count = 0; /* 复位闭环稳定计数器 */
+    s_zeroCross.stable_comm_count = 0;                 /* 复位闭环稳定计数器 */
+    s_zeroCross.filter_level = BLDC_COMP_ReadOutput(); /* 候选电平重置为当前电平 */
+    s_zeroCross.filter_count = 0;                      /* 连续计数清零 */
 }
 
 /**
@@ -316,9 +350,9 @@ void BLDC_COMP_UpdateCommutationTime(uint32_t commutation_time)
 {
     s_zeroCross.last_commutation_time = commutation_time;
 
-    /* ========== 设置过零检测屏蔽期（换相后暂停检测，避免干扰）========== */
-    /* 换相瞬间可能有电流/电磁干扰，屏蔽一个采样周期再检测过零点 */
-    s_zeroCross.blank_time_end = commutation_time + 1;
+    /* 换相后重置滤波状态，让过零检测从当前电平重新开始计数，避免旧候选值污染 */
+    s_zeroCross.filter_level = BLDC_COMP_ReadOutput();
+    s_zeroCross.filter_count = 0;
 
     /* 闭环运行阶段：递增稳定换相计数（用于滤波深度切换）*/
     if (BLDC_Motor_GetState() == BLDC_MOTOR_RUNNING)
@@ -356,12 +390,12 @@ void BLDC_COMP_UpdateSpeedRange(uint8_t speed_range)
     if (speed_range == 0) /* 低速区间 */
     {
         /* 低档：滤波器设为50000 */
-        hcomp.Init.DigitalFilter = 50000;
+        hcomp.Init.DigitalFilter = 0;
     }
     else /* 中速或高速区间 */
     {
         /* 中高档：滤波器设为12000 */
-        hcomp.Init.DigitalFilter = 12000;
+        hcomp.Init.DigitalFilter = 0;
     }
 
     /* 重新初始化比较器 */

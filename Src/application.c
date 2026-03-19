@@ -598,6 +598,10 @@ void app_Init(void)
 extern int32_t test_pwm;
 extern int32_t test;
 extern float test_current;
+extern uint32_t s_delay_30_degree_time;
+extern uint32_t test_last_comm_period;
+extern uint32_t test_target_period;
+extern uint32_t test_startup_pwm;
 void app_lication(void)
 {
     while (1)
@@ -609,5 +613,6 @@ void app_lication(void)
         addr_rx_handle();     // 地址接收处理函数
         app_RF_Recv_handle(); // RF接收处理函数
         // Log("test:%d,test_pwm:%d,test_current:%f\r\n", test, test_pwm, test_current);
+        Log("test:%d,test_pwm:%d,test_startup_pwm:%d,s_delay_30_degree_time:%d,test_last_comm_period:%d,test_target_period:%d\r\n", test, test_pwm, test_startup_pwm, s_delay_30_degree_time, test_last_comm_period, test_target_period);
     }
 }
