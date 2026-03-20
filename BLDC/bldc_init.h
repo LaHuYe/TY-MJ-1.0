@@ -206,6 +206,13 @@ void BLDC_COMP_SetInputPlus(BLDC_Phase_t phase);
  */
 uint8_t BLDC_COMP_ReadOutput(void);
 
+/**
+ * @brief   根据档位动态更新比较器硬件数字滤波值
+ * @param   gear 当前档位（1-100，0表示停止）
+ * @note    默认50000，每升一档减1000，最小500
+ */
+void BLDC_COMP_UpdateDigitalFilter(BLDC_Gear_t gear);
+
 /* 比较器句柄外部声明 */
 extern COMP_HandleTypeDef hcomp;
 

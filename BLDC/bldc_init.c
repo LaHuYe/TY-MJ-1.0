@@ -252,7 +252,7 @@ static void BLDC_COMP_CoreInit(void)
     hcomp.Init.Hysteresis = COMP_WINDOWMODE_DISABLE;
     hcomp.Init.WindowMode = COMP_WINDOWMODE_DISABLE;
     hcomp.Init.TriggerMode = COMP_TRIGGERMODE_NONE; /* 不使用比较器中断 */
-    hcomp.Init.DigitalFilter = 2000;                /* 过零点滤波值，需按波形调整 */
+    hcomp.Init.DigitalFilter = 50000;                /* 过零点滤波值，需按波形调整 */
 
     if (HAL_COMP_Init(&hcomp) != HAL_OK)
     {
@@ -305,4 +305,44 @@ void BLDC_COMP_SetInputPlus(BLDC_Phase_t phase)
 uint8_t BLDC_COMP_ReadOutput(void)
 {
     return HAL_COMP_GetOutputLevel(&hcomp);
+}
+
+/**
+ * @brief   根据档位动态更新比较器硬件数字滤波值
+ * @param   gear 当前档位（1-100，0表示停止）
+ * @return  无
+ * @note    默认滤波值50000，每升一档减1000，最小500
+ *          档位1→50000，档位2→49000，...，档位50→1000，档位51+→500
+ */
+void BLDC_COMP_UpdateDigitalFilter(BLDC_Gear_t gear)
+{
+    uint32_t filter_value;
+
+    if (gear == 0 || gear == BLDC_GEAR_OFF)
+    {
+        filter_value = 50000; /* 停止/未知档位使用最大滤波 */
+    }
+    else
+    {
+        uint32_t reduction = (uint32_t)(gear - 1) * 2000;
+        if (reduction >= 50000 - 500)
+        {
+            filter_value = 500; /* 最小值500 */
+        }
+        else
+        {
+            filter_value = 50000 - reduction;
+        }
+    }
+
+    /* 仅在滤波值实际发生变化时才重新配置，避免频繁停启比较器 */
+    if (hcomp.Init.DigitalFilter == filter_value)
+    {
+        return;
+    }
+
+    HAL_COMP_Stop(&hcomp);
+    hcomp.Init.DigitalFilter = filter_value;
+    HAL_COMP_Init(&hcomp);
+    HAL_COMP_Start(&hcomp);
 }

@@ -80,7 +80,7 @@ void bldc_app_init(void)
         .openloop = {
             .comm_delay = 200,      /* 启动换相间隔：200×50us=10ms */
             .startup_pwm_ccr = 100, /* 启动PWM CCR=300（约25%）*/
-            .pwm_step_ccr = 1,      /* 每次换相增加PWM CCR=2 */
+            .pwm_step_ccr = 2,      /* 每次换相增加PWM CCR=2 */
             .pwm_max_ccr = 500,     /* 开环阶段PWM最大CCR=500 */
         },
         .pwm_limit = {

@@ -30,6 +30,7 @@
 #include "bldc_motor.h"
 #include "adc.h"
 #include "bldc_comp.h"
+#include "bldc_init.h"
 #include "common.h"
 int32_t test = 0;
 uint32_t test_pwm = 0;
@@ -393,14 +394,14 @@ static void Motor_StartupHandle(void)
             s_motor.startup.zero_cross_stable_count++;
         }
         /* 增加PWM（每次换相提升一步扭矩）*/
-        if (s_motor.startup.current_startup_pwm < s_motorConfig.openloop.pwm_max_ccr)
-        {
-            s_motor.startup.current_startup_pwm += s_motorConfig.openloop.pwm_step_ccr;
-            if (s_motor.startup.current_startup_pwm > s_motorConfig.openloop.pwm_max_ccr)
-            {
-                s_motor.startup.current_startup_pwm = s_motorConfig.openloop.pwm_max_ccr;
-            }
-        }
+        // if (s_motor.startup.current_startup_pwm < s_motorConfig.openloop.pwm_max_ccr)
+        // {
+        //     s_motor.startup.current_startup_pwm += s_motorConfig.openloop.pwm_step_ccr;
+        //     if (s_motor.startup.current_startup_pwm > s_motorConfig.openloop.pwm_max_ccr)
+        //     {
+        //         s_motor.startup.current_startup_pwm = s_motorConfig.openloop.pwm_max_ccr;
+        //     }
+        // }
         test_startup_pwm++;
         /* ========== 连续过零点达到10次，切换闭环 ========== */
         if (s_motor.startup.zero_cross_stable_count >= 10)
@@ -512,7 +513,7 @@ static void Motor_RunningHandle(void)
     else
     {
         /* ========== 换相超时强制换相 ========== */
-        uint8_t timeout_factor = 10; /* 超时系数：上次换相周期×10 */
+        uint8_t timeout_factor = 4; /* 超时系数：上次换相周期×10 */
 
         /* 计算超时阈值：使用上次实际换相周期 × 超时系数 */
         uint32_t timeout_samples = s_motor.speed.last_comm_period * timeout_factor;
@@ -680,13 +681,13 @@ static void Motor_SpeedControl(void)
     /* 软启动阶段（进入闭环后100ms内）：阈值=1，快速响应；之后切换为10，稳定调节 */
     uint8_t delay_threshold;
     if (s_motor.pi_data.running_start_time > 0 &&
-        HAL_GetTickDiff(s_motor.pi_data.running_start_time) < 500)
+        HAL_GetTickDiff(s_motor.pi_data.running_start_time) < 10)
     {
         delay_threshold = 1; /* 闭环初始100ms：立即响应，消除开环切换误差 */
     }
     else
     {
-        delay_threshold = 20; /* 正常运行：需连续10次才调节，防止偶发抖动 */
+        delay_threshold = 10; /* 正常运行：需连续10次才调节，防止偶发抖动 */
     }
 
     if (period_error < 0)
@@ -1195,6 +1196,9 @@ void BLDC_Motor_SetSpeed(BLDC_Gear_t gear)
     s_motor.pi_data.integral = 0.0f;
     s_motor.pi_data.decrease_count = 0;
     s_motor.pi_data.increase_count = 0;
+
+    /* 根据新档位更新比较器硬件数字滤波值 */
+    BLDC_COMP_UpdateDigitalFilter(gear);
 
     /* 如果电机正在运行，立即更新PWM */
     if (s_motor.state.state == BLDC_MOTOR_RUNNING)
